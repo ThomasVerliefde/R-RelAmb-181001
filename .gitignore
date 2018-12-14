@@ -35,5 +35,3 @@ vignettes/*.pdf
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
 
-# BAWL-R Data, should be gotten through http://www.ewi-psy.fu-berlin.de/einrichtungen/arbeitsbereiche/allgpsy/forschung/Download/index.html
-BAWL-R.xls
