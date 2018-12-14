@@ -1,17 +1,9 @@
 ---
-title: "BAWL-R Extraction"
+title: "BAWL-R Stimuli Selection"
 author: "Thomas Verliefde"
-date: "2018/12/04"
+date: "2018-12-14"
 output: html_document
 ---
-
-# Issue:
-
-## writing the files results, at the end, in an additional \n
-## Should look into fixing this, when I have the time
-## Also, each word should have only the first word capitalized.
-## Currently, these issues are fixed manually
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -23,7 +15,7 @@ require(tidyselect)
 require(magrittr)
 ```
 
-```{r import, options}
+```{r import, include=FALSE}
 
 bawlR <- "BAWL-R.xls" %>% read_excel %>%
   mutate(
@@ -37,7 +29,7 @@ bawlR <- "BAWL-R.xls" %>% read_excel %>%
 
 ```
 
-```{r explore letter range, options}
+```{r explore letter range, include=FALSE}
 
 bawlR %>% mutate(LETTERS = case_when(
     LETTERS <= 4 ~ "[,4]",
@@ -57,7 +49,7 @@ bawlR %>% group_by(WORD_CLASS) %>% summarize(min(EMO_MEAN),max(EMO_MEAN),sd(EMO_
 
 
 
-```{r previously used, options}
+```{r previously used stims, options}
 
 nounsPos <- c("mut", "lust", "glück", "freude")
 nounsNeg <- c("leid", "ärger", "furcht", "trauer")
@@ -65,7 +57,7 @@ nounsNeg <- c("leid", "ärger", "furcht", "trauer")
 adjPos <- c("frei", "klug", "treu", "gesund", "beliebt", "ehrlich", "herzlich", "friedlich")
 adjNeg <- c("blöd", "dumm", "fies", "brutal", "grausam", "neidisch", "peinlich", "widerlich")
 
-kathi <- bawlR %>% filter(
+old <- bawlR %>% filter(
   WORD_LOWER %in% c(nounsPos,nounsNeg,adjPos,adjNeg)
 ) %>% mutate(
   VAL = case_when(
@@ -75,15 +67,18 @@ kathi <- bawlR %>% filter(
 )
 ```
 
-```{r kathi, options}
+```{r old, options}
 
-kathi %>% filter(`Ftot/1MIL` >= 10) %>% group_by(VAL) %>% summarize(
+old %>% select(WORD,`Ftot/1MIL`) %>% arrange(`Ftot/1MIL`)
+
+# "Neidisch" only has a Ftot/1MIL of 2, while the others are all >= 14
+
+old %>% filter(`Ftot/1MIL` >= 10) %>% group_by(VAL) %>% summarize(
   mean(EMO_MEAN),max(EMO_MEAN),min(EMO_MEAN),sd(EMO_MEAN),
   mean(AROUSAL_MEAN),max(AROUSAL_MEAN),min(AROUSAL_MEAN),sd(AROUSAL_MEAN),
   mean(`Ftot/1MIL`),max(`Ftot/1MIL`),min(`Ftot/1MIL`),sd(`Ftot/1MIL`)
 ) %>% t
   
-# "Neidisch" only has a Ftot/1MIL of 2, while the others are all >= 14
 
 ```
 
@@ -122,20 +117,22 @@ nounNeg <- bawlR %>% filter(
 }
 ```
 
-Note:
+#####################################################################
+# Selecting/Creating Primes and Targets for Experiment and Practice #
+#####################################################################
 
 We will have multiple sets of primes, to match for name length of the significant others.
-As we have 4 SOs, each will get 1 matching length letter string (B,H,S,T),
-and 1 matching length valenced prime (pos/neg)
+As we have 4 SOs, each will get 1 matching length random letter string, and 1 matching length valenced prime (pos|neg).
 
 
-```{r creating experiment textfile, options}
+```{r creating random letter strings textfiles, options}
 
 "Stimuli" %>% dir.create(showWarnings = FALSE)
 
 # Strings of different sizes
 
-set.seed(20181001); lapply(
+set.seed(20181001)
+lapply(
   2:9,
   function (x) {
     replicate(
@@ -147,7 +144,7 @@ set.seed(20181001); lapply(
       simplify = FALSE
     )
   }
-) %>% unlist %>% paste(collapse=" ") %>% write("Stimuli/experimentPrime_Str.txt")
+) %>% unlist %>% paste(collapse=" ") %>% writeLines("Stimuli/experimentPrime_Str.txt",sep="")
 
 
 set.seed(20181001); lapply(
@@ -162,11 +159,11 @@ set.seed(20181001); lapply(
       simplify = FALSE
     )
   }
-) %>% unlist %>% paste(collapse=" ") %>% write("Stimuli/practicePrime_Str.txt")
+) %>% unlist %>% paste(collapse=" ") %>% writeLines("Stimuli/practicePrime_Str.txt",sep="")
 
 ```
 
-```{r creating experiment textfile, options}
+```{r creating experiment primes and targets textfiles, options}
 # Pos & Neg Nouns, in binsizes: 3-4, 5-6, 7-8, 9-10
 
 "Stimuli" %>% dir.create(showWarnings = F)
@@ -193,7 +190,8 @@ primePos <- nounPos %>% filter(LETTERS == 3 | LETTERS == 4) %>%
         WORD == "VERTRAUEN" |
           WORD == "WOCHENENDE"
       ),by = vars_select(names(.),everything())
-  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>% write("Stimuli/experimentPrime_Pos.txt")}
+  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>%
+      writeLines("Stimuli/experimentPrime_Pos.txt",sep="")}
 
 primeNeg <- nounNeg %>% filter(LETTERS == 3 | LETTERS == 4) %>%
   filter(
@@ -217,7 +215,8 @@ primeNeg <- nounNeg %>% filter(LETTERS == 3 | LETTERS == 4) %>%
         WORD == "GEFÄNGNIS" |
           WORD == "VERBRECHEN"
       ),by = vars_select(names(.),everything())
-  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>% write("Stimuli/experimentPrime_Neg.txt")}
+  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>%
+      writeLines("Stimuli/experimentPrime_Neg.txt",sep="")}
 
 # Positive and Negative Targets, 8 each, only 4 each will be used
 
@@ -226,7 +225,8 @@ targetPos <- adjPos %>%
     LETTERS >= 4,
     EMO_MEAN > mean(EMO_MEAN),
     WORD != "POSITIV"
-    ) %T>% {paste(.$WORD,collapse=" ") %>% write("Stimuli/experimentTarget_Pos.txt")}
+  ) %T>% {paste(.$WORD,collapse=" ") %>%
+        writeLines("Stimuli/experimentTarget_Pos.txt",sep="")}
 
 targetNeg <- adjNeg %>%
   filter(
@@ -234,12 +234,13 @@ targetNeg <- adjNeg %>%
     WORD != "NEGATIV",
     WORD != "NUKLEAR",
     WORD != "SCHLECHT"
-  ) %T>% {paste(.$WORD,collapse=" ") %>% write("Stimuli/experimentTarget_Neg.txt")}
+  ) %T>% {paste(.$WORD,collapse=" ") %>%
+      writeLines("Stimuli/experimentTarget_Neg.txt",sep="")}
 
 
 ```
 
-```{r creating practice textfile, options}
+```{r creating practice prime and target textfiles, options}
 
 "Stimuli" %>% dir.create(showWarnings = F)
 
@@ -247,15 +248,19 @@ targetNeg <- adjNeg %>%
 # All identical to impamb2's practice words
 
 paste("Kuss","Idee","Chance",collapse = " ") %>%
-  write("Stimuli/practicePrime_Pos.txt")
+  writeLines("Stimuli/practicePrime_Pos.txt",sep="")
 
 paste("Mord","Angst","Sklave",collapse = " ") %>%
-  write("Stimuli/practicePrime_Neg.txt")
+  writeLines("Stimuli/practicePrime_Neg.txt",sep="")
 
 paste("Geduldig","Zärtlich","Humorvoll","Fleissig",collapse = " ") %>%
-  write("Stimuli/practiceTarget_Pos.txt")
+  writeLines("Stimuli/practiceTarget_Pos.txt",sep="")
 
 paste("Boshaft","Korrupt","Ungerecht","Gehässig",collapse = " ") %>%
-  write("Stimuli/practiceTarget_Neg.txt")
+  writeLines("Stimuli/practiceTarget_Neg.txt",sep="")
 
 ```
+
+#####################################
+# Analysing Chosen Primes & Targets #
+#####################################
