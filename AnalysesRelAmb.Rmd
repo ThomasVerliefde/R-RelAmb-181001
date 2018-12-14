@@ -1,0 +1,37 @@
+---
+Title:  "Analyses RelAmb"
+Author: "Thomas Verliefde"
+Date:   "2018-12-12""
+Output: html_document
+---
+
+```{r setup, options}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+
+lapply(
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","magrittr"),
+  require,
+  character.only = T
+)
+```
+
+##################
+# Importing Data #
+##################
+
+Make sure the relevant datafiles (Data_RelAmb.zip and BAWL-R.xls) are in the working directory.
+
+```{r import, message=FALSE}
+
+temp <- tempdir()
+df_raw <- "Data_RelAmb.zip" %>% {
+  ldply(
+    .data = unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %$% Name,
+    .fun = function(x) unzip(.,files=x,exdir=temp) %>% read_csv
+  )
+}
+rm(temp)
+
+```
+

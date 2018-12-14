@@ -1,0 +1,261 @@
+---
+title: "BAWL-R Extraction"
+author: "Thomas Verliefde"
+date: "2018/12/04"
+output: html_document
+---
+
+# Issue:
+
+## writing the files results, at the end, in an additional \n
+## Should look into fixing this, when I have the time
+## Also, each word should have only the first word capitalized.
+## Currently, these issues are fixed manually
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+require(readxl)
+require(stringr)
+require(tidyverse)
+require(tidyselect)
+require(magrittr)
+```
+
+```{r import, options}
+
+bawlR <- "BAWL-R.xls" %>% read_excel %>%
+  mutate(
+    WORD_CLASS = recode(
+      WORD_CLASS,
+      "N" = "NOUN",
+      "V" = "VERB",
+      "A" = "ADJ"
+    )
+  )
+
+```
+
+```{r explore letter range, options}
+
+bawlR %>% mutate(LETTERS = case_when(
+    LETTERS <= 4 ~ "[,4]",
+    LETTERS <= 7 ~ "[5,7]",
+    LETTERS >= 8 ~ "[8,]"
+  )) %>% count(WORD_CLASS,LETTERS)
+
+```
+
+```{r valence, options}
+
+bawlR %>% group_by(WORD_CLASS) %>% summarize(min(EMO_MEAN),max(EMO_MEAN),sd(EMO_MEAN))
+
+```
+
+
+
+
+
+```{r previously used, options}
+
+nounsPos <- c("mut", "lust", "glück", "freude")
+nounsNeg <- c("leid", "ärger", "furcht", "trauer")
+
+adjPos <- c("frei", "klug", "treu", "gesund", "beliebt", "ehrlich", "herzlich", "friedlich")
+adjNeg <- c("blöd", "dumm", "fies", "brutal", "grausam", "neidisch", "peinlich", "widerlich")
+
+kathi <- bawlR %>% filter(
+  WORD_LOWER %in% c(nounsPos,nounsNeg,adjPos,adjNeg)
+) %>% mutate(
+  VAL = case_when(
+    EMO_MEAN < 0 ~ 'Neg',
+    EMO_MEAN > 0 ~ 'Pos'
+  )
+)
+```
+
+```{r kathi, options}
+
+kathi %>% filter(`Ftot/1MIL` >= 10) %>% group_by(VAL) %>% summarize(
+  mean(EMO_MEAN),max(EMO_MEAN),min(EMO_MEAN),sd(EMO_MEAN),
+  mean(AROUSAL_MEAN),max(AROUSAL_MEAN),min(AROUSAL_MEAN),sd(AROUSAL_MEAN),
+  mean(`Ftot/1MIL`),max(`Ftot/1MIL`),min(`Ftot/1MIL`),sd(`Ftot/1MIL`)
+) %>% t
+  
+# "Neidisch" only has a Ftot/1MIL of 2, while the others are all >= 14
+
+```
+
+```{r selecting items, options}
+
+adjPos <- bawlR %>% filter(
+  WORD_CLASS == "ADJ",
+  EMO_MEAN >= 2,
+  `Ftot/1MIL` >= 10
+) %T>% {
+  count(.,LETTERS) %>% print
+}
+
+adjNeg <- bawlR %>% filter(
+  WORD_CLASS == "ADJ",
+  EMO_MEAN <= -2,
+  `Ftot/1MIL` >= 10
+) %T>% {
+  count(.,LETTERS) %>% print
+}
+
+nounPos <- bawlR %>% filter(
+  WORD_CLASS == "NOUN",
+  EMO_MEAN >= 2,
+  `Ftot/1MIL` >= 30
+) %T>% {
+  count(.,LETTERS) %>% print
+}
+
+nounNeg <- bawlR %>% filter(
+  WORD_CLASS == "NOUN",
+  EMO_MEAN <= -2,
+  `Ftot/1MIL` >= 30
+) %T>% {
+  count(.,LETTERS) %>% print
+}
+```
+
+Note:
+
+We will have multiple sets of primes, to match for name length of the significant others.
+As we have 4 SOs, each will get 1 matching length letter string (B,H,S,T),
+and 1 matching length valenced prime (pos/neg)
+
+
+```{r creating experiment textfile, options}
+
+"Stimuli" %>% dir.create(showWarnings = FALSE)
+
+# Strings of different sizes
+
+set.seed(20181001); lapply(
+  2:9,
+  function (x) {
+    replicate(
+      4,
+      sample(LETTERS[-c(1,5,9,15,21,25)],1) %>% paste0(
+        sample(letters[-c(1,5,9,15,21,25)],x, replace=FALSE) %>% paste(collapse="")
+      )
+      ,
+      simplify = FALSE
+    )
+  }
+) %>% unlist %>% paste(collapse=" ") %>% write("Stimuli/experimentPrime_Str.txt")
+
+
+set.seed(20181001); lapply(
+  c(4,6),
+  function (x) {
+    replicate(
+      1,
+      sample(LETTERS[-c(1,5,9,15,21,25)],1) %>% paste0(
+        sample(letters[-c(1,5,9,15,21,25)],x, replace=FALSE) %>% paste(collapse="")
+      )
+      ,
+      simplify = FALSE
+    )
+  }
+) %>% unlist %>% paste(collapse=" ") %>% write("Stimuli/practicePrime_Str.txt")
+
+```
+
+```{r creating experiment textfile, options}
+# Pos & Neg Nouns, in binsizes: 3-4, 5-6, 7-8, 9-10
+
+"Stimuli" %>% dir.create(showWarnings = F)
+
+primePos <- nounPos %>% filter(LETTERS == 3 | LETTERS == 4) %>%
+  filter(
+    WORD == "MUT" |
+      WORD == "LUST"
+  ) %>% full_join(
+    nounPos %>% filter(LETTERS == 5 | LETTERS == 6) %>%
+      filter(
+        WORD == "GLÜCK" |
+          WORD == "FREUDE"
+      ),by = vars_select(names(.),everything())
+  ) %>% full_join(
+    nounPos %>% filter(LETTERS == 7 | LETTERS == 8) %>%
+      filter(
+        WORD == "FRIEDEN" |
+          WORD == "HOFFNUNG"
+      ),by = vars_select(names(.),everything())
+  ) %>% full_join(
+    nounPos %>% filter(LETTERS == 9 | LETTERS == 10) %>%
+      filter(
+        WORD == "VERTRAUEN" |
+          WORD == "WOCHENENDE"
+      ),by = vars_select(names(.),everything())
+  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>% write("Stimuli/experimentPrime_Pos.txt")}
+
+primeNeg <- nounNeg %>% filter(LETTERS == 3 | LETTERS == 4) %>%
+  filter(
+    WORD == "NOT" |
+      WORD == "LEID"
+  ) %>% full_join(
+    nounNeg %>% filter(LETTERS == 5 | LETTERS == 6) %>%
+      filter(
+        WORD == "FEIND" |
+          WORD == "STREIT"
+      ),by = vars_select(names(.),everything())
+  ) %>% full_join(
+    nounNeg %>% filter(LETTERS == 7 | LETTERS == 8) %>%
+      filter(
+        WORD == "DROHUNG" |
+          WORD == "ABSCHIED"
+      ),by = vars_select(names(.),everything())
+  ) %>% full_join(
+    nounNeg %>% filter(LETTERS == 9 | LETTERS == 10) %>%
+      filter(
+        WORD == "GEFÄNGNIS" |
+          WORD == "VERBRECHEN"
+      ),by = vars_select(names(.),everything())
+  ) %>% arrange(LETTERS) %T>% {paste(.$WORD_LOWER,collapse=" ") %>% str_to_title %>% write("Stimuli/experimentPrime_Neg.txt")}
+
+# Positive and Negative Targets, 8 each, only 4 each will be used
+
+targetPos <- adjPos %>%
+  filter(
+    LETTERS >= 4,
+    EMO_MEAN > mean(EMO_MEAN),
+    WORD != "POSITIV"
+    ) %T>% {paste(.$WORD,collapse=" ") %>% write("Stimuli/experimentTarget_Pos.txt")}
+
+targetNeg <- adjNeg %>%
+  filter(
+    LETTERS >= 4,
+    WORD != "NEGATIV",
+    WORD != "NUKLEAR",
+    WORD != "SCHLECHT"
+  ) %T>% {paste(.$WORD,collapse=" ") %>% write("Stimuli/experimentTarget_Neg.txt")}
+
+
+```
+
+```{r creating practice textfile, options}
+
+"Stimuli" %>% dir.create(showWarnings = F)
+
+
+# All identical to impamb2's practice words
+
+paste("Kuss","Idee","Chance",collapse = " ") %>%
+  write("Stimuli/practicePrime_Pos.txt")
+
+paste("Mord","Angst","Sklave",collapse = " ") %>%
+  write("Stimuli/practicePrime_Neg.txt")
+
+paste("Geduldig","Zärtlich","Humorvoll","Fleissig",collapse = " ") %>%
+  write("Stimuli/practiceTarget_Pos.txt")
+
+paste("Boshaft","Korrupt","Ungerecht","Gehässig",collapse = " ") %>%
+  write("Stimuli/practiceTarget_Neg.txt")
+
+```
