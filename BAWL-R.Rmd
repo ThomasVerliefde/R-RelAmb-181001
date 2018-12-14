@@ -15,6 +15,15 @@ require(tidyselect)
 require(magrittr)
 ```
 
+########################
+# Exploring BAWL-R.xls #
+########################
+
+Critical Note:
+For this code to work, you have to have the BAWL-R.xls file.
+You can request access for research purposes from:
+  http://www.ewi-psy.fu-berlin.de/einrichtungen/arbeitsbereiche/allgpsy/forschung/Download/index.html
+
 ```{r import, include=FALSE}
 
 bawlR <- "BAWL-R.xls" %>% read_excel %>%
