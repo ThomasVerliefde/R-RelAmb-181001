@@ -1,7 +1,7 @@
 ---
 Title:  "Analyses RelAmb"
 Author: "Thomas Verliefde"
-Date:   "2018-12-12""
+Date:   "2018-12-17""
 Output: html_document
 ---
 
@@ -16,13 +16,13 @@ lapply(
 )
 ```
 
-##################
-# Importing Data #
-##################
+#############################
+# Importing & Cleaning Data #
+#############################
 
 Make sure the relevant datafiles (Data_RelAmb.zip and BAWL-R.xls) are in the working directory.
 
-```{r import, message=FALSE}
+```{r Data_RelAmb.zip, message=FALSE}
 
 temp <- tempdir()
 df_raw <- "Data_RelAmb.zip" %>% {
@@ -35,3 +35,56 @@ rm(temp)
 
 ```
 
+```{r label, options}
+
+df <- df_raw %>%
+  select(
+    -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials,hostName)
+    ) %>%
+  gather(
+    "fullTrials",
+    "trialsOutput",
+    matches("^([a-z])+_(\\d)+_([a-z])+$")
+  ) %>%
+  gather(
+    "fullOthers",
+    "otherOutput",
+    matches("^(other)(Pos|Neg)(1|2)(_)")
+  ) %>%
+  separate(
+    fullTrials,
+    c("Block","Trial","Desc"),
+    sep = "_"
+    ) %>% group_by(Subject) %>%
+  spread(
+    key = Desc, value = trialsOutput
+  ) %>%
+  arrange(Subject)
+  
+
+
+```
+
+
+Transform primeCat to something readable [0 = positive noun, 1 = negative noun, 2 = positive other, 3 = negative other, 4 = dflksj]
+Transform targetCat to something readable [0 = positive adjective, 1 = negative adjective]
+Create a "congruent/incongruent" variable
+Create a "correct/false" response variable (depending on key [Aneg, Apos], answer [A, L], & targetCat [0, 1])
+Create a "exclude/include" variable (based on correct/false and time > 3000 or < 150)
+
+
+
+```{r BAWL-R.xls, options}
+
+bawl <- "BAWL-R.xls" %>% read_excel %>%
+  mutate(
+    WORD_CLASS = recode(
+      WORD_CLASS,
+      "N" = "NOUN",
+      "V" = "VERB",
+      "A" = "ADJ"
+    )
+  )
+
+
+```
