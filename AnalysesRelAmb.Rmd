@@ -35,16 +35,34 @@ rm(temp)
 
 ```
 
-```{r label, options}
 
-df <- df_raw %>%
+This part cleans the data up a lot, and puts it in an useable long format.
+
+A few variables are dropped, as they are not crucial for the current investigations.
+The data for each trial (both practice and experiment) is put in long format.
+The data for each significant other is put in long format.
+The information about block(practice/experiment), trialnr, and descriptives (Answer,Prime, primeType, Target, targetType, RT).
+Descriptives is spread out again, to have columns for each.
+Some variables are renamed.
+Some variables are mutated:
+  primeType & targetType get clear non-numerical labels
+  primeValence is created to reflect the valence of the primes (regardless of nouns or others)
+  Condition shows congruent or incongruent trials
+  Correct indicates whether the target was correctly classified
+  Inclusion sets whether or not the trial should be included
+    Note: we should still implement exclusion of low acc participants # tried implementing, not yet ready
+  LogRT is a simple transformation of RT to it's natural logarithm.
+
+```{r cleaning & gathering, options}
+
+df <- df_raw %>% 
   select(
     -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials,hostName)
     ) %>%
   gather(
     "fullTrials",
     "trialsOutput",
-    matches("^([a-z])+_(\\d)+_([a-z])+$")
+    matches("^([a-z])+_(\\d)+_([a-z])+$") # This regex matches things with structure: abcd*_123*_abcd*
   ) %>%
   gather(
     "fullOthers",
@@ -55,22 +73,63 @@ df <- df_raw %>%
     fullTrials,
     c("Block","Trial","Desc"),
     sep = "_"
-    ) %>% group_by(Subject) %>%
+    ) %>%
   spread(
     key = Desc, value = trialsOutput
+  ) %>% group_by(Subject) %>%
+  rename(
+    Answer = answer,
+    Prime = prime,
+    primeType = primeCat,
+    Target = target,
+    targetType = targetCat,
+    RT = time
+  ) %>% mutate(
+    primeType = recode(
+      primeType,
+      `0`= "nounPos",
+      `1`= "nounNeg",
+      `2`= "otherPos",
+      `3`= "otherNeg",
+      `4`= "letterStr"
+    ),
+    targetType = recode(
+      targetType,
+      `0` = "adjPos",
+      `1` = "adjNeg"
+    ),
+    primeValence = case_when(
+      grepl("Pos$",primeType) ~ "Pos",
+      grepl("Neg$",primeType) ~ "Neg",
+      TRUE ~ "Neutral"
+    ),
+    Condition = case_when(
+      primeValence == "Pos" && targetType == "adjPos" ~ "Congruent",
+      primeValence == "Neg" && targetType == "adjNeg" ~ "Congruent",
+      TRUE ~ "Incongruent"
+    ),
+    Correct = case_when(
+      Key == "Apos" & targetType == "adjPos" & Answer == "A" ~ TRUE,
+      Key == "Apos" & targetType == "adjNeg" & Answer == "L" ~ TRUE,
+      Key == "Aneg" & targetType == "adjNeg" & Answer == "A" ~ TRUE,
+      Key == "Aneg" & targetType == "adjPos" & Answer == "L" ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    Accuracy = mean(Correct),
+    Inclusion = case_when(
+      Correct %>% not ~ FALSE,
+      RT < 300 ~ FALSE,
+      RT > 3000 ~ FALSE,
+      TRUE ~ TRUE
+    ),
+    SubjInclusion = mean(Inclusion),
+    logRT = RT %>% as.numeric %>% log
   ) %>%
   arrange(Subject)
-  
-
 
 ```
 
 
-Transform primeCat to something readable [0 = positive noun, 1 = negative noun, 2 = positive other, 3 = negative other, 4 = dflksj]
-Transform targetCat to something readable [0 = positive adjective, 1 = negative adjective]
-Create a "congruent/incongruent" variable
-Create a "correct/false" response variable (depending on key [Aneg, Apos], answer [A, L], & targetCat [0, 1])
-Create a "exclude/include" variable (based on correct/false and time > 3000 or < 150)
 
 
 
