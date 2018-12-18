@@ -1,7 +1,7 @@
 ---
 Title:  "Analyses RelAmb"
 Author: "Thomas Verliefde"
-Date:   "2018-12-17""
+Date:   "2018-12-18""
 Output: html_document
 ---
 
@@ -21,6 +21,21 @@ lapply(
 #############################
 
 Make sure the relevant datafiles (Data_RelAmb.zip and BAWL-R.xls) are in the working directory.
+
+```{r BAWL-R.xls, options}
+
+bawl <- "BAWL-R.xls" %>% read_excel %>%
+  mutate(
+    WORD_CLASS = recode(
+      WORD_CLASS,
+      "N" = "NOUN",
+      "V" = "VERB",
+      "A" = "ADJ"
+    )
+  )
+
+
+```
 
 ```{r Data_RelAmb.zip, message=FALSE}
 
@@ -45,6 +60,7 @@ The information about block(practice/experiment), trialnr, and descriptives (Ans
 Descriptives is spread out again, to have columns for each.
 Some variables are renamed.
 Some variables are mutated:
+  Many are transformed to strings or numericals
   primeType & targetType get clear non-numerical labels
   primeValence is created to reflect the valence of the primes (regardless of nouns or others)
   Condition shows congruent or incongruent trials
@@ -58,7 +74,7 @@ Some variables are mutated:
 df <- df_raw %>% 
   select(
     -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials,hostName)
-    ) %>%
+  ) %>%
   gather(
     "fullTrials",
     "trialsOutput",
@@ -67,16 +83,29 @@ df <- df_raw %>%
   gather(
     "fullOthers",
     "otherOutput",
-    matches("^(other)(Pos|Neg)(1|2)(_)")
+    matches("^(other)(Pos|Neg)(1|2)") # This regex matches: otherPos1_*, otherPos2_*¨, otherNeg1_*, or otherNeg2_*
   ) %>%
   separate(
     fullTrials,
     c("Block","Trial","Desc"),
     sep = "_"
-    ) %>%
+  ) %>%
   spread(
     key = Desc, value = trialsOutput
-  ) %>% group_by(Subject) %>%
+  ) %>%
+  separate(
+    fullOthers,
+    c("SO","Desc"),
+    sep = "_",
+    extra = "merge",
+    fill = "right"
+  ) %>%
+  mutate(
+    Desc = Desc %>% replace_na("otherNames") # alternatively, we could use coalesce. In this situation, the result would be ==
+  ) %>%
+  spread(
+    key = Desc, value = otherOutput
+  ) %>%
   rename(
     Answer = answer,
     Prime = prime,
@@ -84,7 +113,18 @@ df <- df_raw %>%
     Target = target,
     targetType = targetCat,
     RT = time
-  ) %>% mutate(
+  ) %>%
+  mutate_at(
+    vars(RT,Age,matches("^(time)")),
+    as.numeric
+  ) %>%
+  mutate_at(
+    vars(Subject,Trial),
+    as.character
+  ) %>%
+  filter(Block == "experiment") %>% # drop all practice trials
+  group_by(Subject) %>%
+  mutate(
     primeType = recode(
       primeType,
       `0`= "nounPos",
@@ -104,8 +144,8 @@ df <- df_raw %>%
       TRUE ~ "Neutral"
     ),
     Condition = case_when(
-      primeValence == "Pos" && targetType == "adjPos" ~ "Congruent",
-      primeValence == "Neg" && targetType == "adjNeg" ~ "Congruent",
+      primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
+      primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
       TRUE ~ "Incongruent"
     ),
     Correct = case_when(
@@ -115,16 +155,12 @@ df <- df_raw %>%
       Key == "Aneg" & targetType == "adjPos" & Answer == "L" ~ TRUE,
       TRUE ~ FALSE
     ),
-    Accuracy = mean(Correct),
-    Inclusion = case_when(
-      Correct %>% not ~ FALSE,
-      RT < 300 ~ FALSE,
-      RT > 3000 ~ FALSE,
-      TRUE ~ TRUE
-    ),
+    Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
+    Inclusion = Correct & RT > 300 & RT < 3000,
     SubjInclusion = mean(Inclusion),
-    logRT = RT %>% as.numeric %>% log
+    logRT = log(RT)
   ) %>%
+  ungroup %>%
   arrange(Subject)
 
 ```
@@ -133,17 +169,3 @@ df <- df_raw %>%
 
 
 
-```{r BAWL-R.xls, options}
-
-bawl <- "BAWL-R.xls" %>% read_excel %>%
-  mutate(
-    WORD_CLASS = recode(
-      WORD_CLASS,
-      "N" = "NOUN",
-      "V" = "VERB",
-      "A" = "ADJ"
-    )
-  )
-
-
-```
