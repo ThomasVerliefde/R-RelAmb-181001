@@ -3,6 +3,8 @@ Title:  "Analyses RelAmb"
 Author: "Thomas Verliefde"
 Date:   "2018-12-18""
 Output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, options}
@@ -101,7 +103,7 @@ df <- df_raw %>%
     fill = "right"
   ) %>%
   mutate(
-    Desc = Desc %>% replace_na("otherNames") # alternatively, we could use coalesce. In this situation, the result would be ==
+    Desc = Desc %>% replace_na("otherNames") # alternatively, we could use coalesce.
   ) %>%
   spread(
     key = Desc, value = otherOutput
@@ -125,6 +127,22 @@ df <- df_raw %>%
   filter(Block == "experiment") %>% # drop all practice trials
   group_by(Subject) %>%
   mutate(
+    Gender = recode(
+      Gender,
+      "männlich" = "male",
+      "weiblich" = "female"
+    ),
+    Language = recode(
+      Language,
+      "Deutsch" = "German",
+      "Sonstiges" = "Other"
+    ),
+    Handedness = recode(
+      Handedness,
+      "rechts" = "right",
+      "links" = "left",
+      "beide" = "both"
+    ),
     primeType = recode(
       primeType,
       `0`= "nounPos",
@@ -165,7 +183,45 @@ df <- df_raw %>%
 
 ```
 
+################
+# Demographics #
+################
 
+```{r demographics, options}
+
+df %>% filter(Subject %>% duplicated %>% not) %>%
+  summarize(
+    n = n(),
+    n_Female = Gender %>% equals("weiblich") %>% sum,
+    perc_Female = n_Female %>% divide_by(n),
+    n_Male = Gender %>% equals("männlich") %>% sum,
+    perc_Male = n_Male %>% divide_by(n),
+    # n_Other = Gender %>% equals("X") %>% sum,
+    # perc_Other = n_Other %>% divide_by(n),
+    mean_Age = Age %>% mean,
+    sd_Age = Age %>% sd,
+    n_LangGerman = Language %>% equals("Deutsch") %>% sum,
+    perc_LangGerman = n_German %>% divide_by(n),
+    # n_LangOther = Language %>% equals("Sonstiges") %>% sum,
+    # perc_LangOther = N_LangOther %>% divide_by(n),
+    n_HandR = Handedness %>% equals()
+  )
+
+
+df %>% filter(Subject %>% duplicated %>% not) %>% {
+  bind_rows(
+      count(., "Var" = "Total_N"),
+      count(., "Var" = Gender),
+      count(., "Var" = Language),
+      count(., "Var" = Handedness)
+  )
+} %>% mutate("%" = extract2(.,1,"n") %>% divide_by(n,.))
+
+
+
+
+
+```
 
 
 
