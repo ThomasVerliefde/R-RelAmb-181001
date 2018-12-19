@@ -85,7 +85,7 @@ df <- df_raw %>%
   gather(
     "fullOthers",
     "otherOutput",
-    matches("^(other)(Pos|Neg)(1|2)") # This regex matches: otherPos1_*, otherPos2_*¨, otherNeg1_*, or otherNeg2_*
+    matches("^(other)(Pos|Neg)(1|2)") # This regex matches: otherPos1*, otherPos2*¨, otherNeg1*, or otherNeg2*
   ) %>%
   separate(
     fullTrials,
@@ -97,7 +97,7 @@ df <- df_raw %>%
   ) %>%
   separate(
     fullOthers,
-    c("SO","Desc"),
+    c("so","Desc"),
     sep = "_",
     extra = "merge",
     fill = "right"
@@ -160,6 +160,10 @@ df <- df_raw %>%
       grepl("Pos$",primeType) ~ "Pos",
       grepl("Neg$",primeType) ~ "Neg",
       TRUE ~ "Neutral"
+    ),
+    soValence = case_when(
+      grepl("Pos",so) ~ "Pos",
+      grepl("Neg",so) ~ "Neg"
     ),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
@@ -232,8 +236,9 @@ df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% {
 df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% 
   summarize_at(
     vars(Age,Accuracy,RT),
-    funs(mean,sd,.args = list(na.rm=T))
-  ) %>% gather("Var","Value") %>% arrange(Var)
+    funs(mean,sd,min,max,.args = list(na.rm=T))
+  ) %>% gather("Var","Value") %>% arrange(Var) %>% separate(Var,c("Var","Func"),sep="_") %>%
+  spread(Func,Value) %>% select(Var,mean,sd,min,max)
 
 ```
 
@@ -249,13 +254,52 @@ df %>% filter(Subject %>% duplicated %>% not) %>%
 df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
   summarize_at(
     vars(matches("^time")),
-    funs(mean,sd,.args=list(na.rm=T))
+    funs(mean,sd,min,max,.args=list(na.rm=T))
   ) %>% select(
     sapply(
       c("Other","Practice","Experiment","Explicit","Demographics","Total"),
       matches
     ) # I am actually suprised that this works...
-  ) %>% gather("Var","Value") %>% separate(Var,c("Var","Func"),sep="_")
+  ) %>% gather("Var","Value") %>% separate(Var,c("Var","Func"),sep="_") %>%
+  spread(Func,Value) %>% select(Var,mean,sd,min,max)
+
+```
+
+```{r Study, options}
+
+df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
+  count(Study)
+
+```
+
+######################
+# Significant Others #
+######################
+
+```{r Names, options}
+
+df %>% group_by(otherNames,Subject) %>%
+  summarize %>% tally %>% add_count(n) %>% arrange(nn %>% desc)
+
+```
+
+```{r Relations, options}
+
+df %>% group_by(Rel,otherNames,Subject) %>%
+  summarize %>% ungroup %>% count("Relation_Type" = Rel)
+
+```
+
+```{r ???, options}
+
+```
+
+#########################
+## Differences Pos/Neg ##
+#########################
+
+```{r SO, options}
+
 
 
 ```
