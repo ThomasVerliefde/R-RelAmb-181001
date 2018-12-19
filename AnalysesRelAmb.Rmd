@@ -174,11 +174,11 @@ df <- df_raw %>%
       TRUE ~ FALSE
     ),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
-    baseInclusion = Correct & RT > 300 & RT < 3000,
-    subjInclusion = 1 - mean(baseInclusion) < 0.83,
+    baseInclusion = Correct & RT >= 300 & RT <= 3000,
+    fullInclusion = 1 - mean(baseInclusion) < 0.83,
       # If we have to exclude more than 83% of the trials of a single participant,
       #  then this participant will be excluded entirely.
-    Inclusion = baseInclusion & subjInclusion,
+    Inclusion = baseInclusion & fullInclusion,
     logRT = log(RT)
   ) %>%
   ungroup %>%
@@ -186,19 +186,32 @@ df <- df_raw %>%
 
 ```
 
-################
-# Demographics #
-################
+#######################
+# Demographics & More #
+#######################
 
 ```{r Inclusions, options}
 
-df %$% equals(Inclusion,baseInclusion) %>% all
+df %>% group_by(Subject,Trial) %>% summarize(
+  "incl" = baseInclusion %>% not %>% mean
+) %>% ungroup %$% mean(incl) %>% multiply_by(100) %>% signif(5) %>%
+  paste0(.,"% of trials were excluded because they were either incorrectly categorized,\n responed to too quickly (<300ms), or responded to too slowly (>3000ms)") %>%
+  cat
+
+df %>% filter(Subject %>% duplicated) %$% sum(fullInclusion %>% not) %>%
+  paste("A total of",.,"participants were fully excluded due to extremes in accuracy and/or latency.") %>%
+  cat
+
+df %>% group_by(Subject,Trial) %>% summarize("trialInclusion" = Inclusion %>% mean) %>% ungroup %>%
+  summarize(trialInclusion %>% mean) %>% as.numeric %>% multiply_by(100) %>% signif(5) %>%
+  paste("In total,",.,"% of all trials were included in the analyses.") %>%
+  cat
 
 ```
 
 ```{r Gender; Language; & Handedness, options}
 
-df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>% {
+df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% {
   bind_rows(
     count(., "Var" = "Total"),
     count(., "Var" = Gender),
@@ -212,21 +225,37 @@ df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>% {
     signif(4)
 )
 
-
 ```
 
-```{r Age; Accuracy; & Time, options}
+```{r Age; Accuracy; & RT, options}
 
-df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>% 
+df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% 
   summarize_at(
-    vars(Age,Accuracy,timeExperiment,timeExperiment,timeTotal),
-    .funs = funs(mean,sd,.args = list(na.rm=T))
-  )
-
-
-
-
-
+    vars(Age,Accuracy,RT),
+    funs(mean,sd,.args = list(na.rm=T))
+  ) %>% gather("Var","Value") %>% arrange(Var)
 
 ```
 
+```{r Control Variables, options}
+
+df %>% filter(Subject %>% duplicated %>% not) %>%
+  count(Key,FirstOthers,fullInclusion)
+
+```
+
+```{r Timings, options}
+
+df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
+  summarize_at(
+    vars(matches("^time")),
+    funs(mean,sd,.args=list(na.rm=T))
+  ) %>% select(
+    sapply(
+      c("Other","Practice","Experiment","Explicit","Demographics","Total"),
+      matches
+    ) # I am actually suprised that this works...
+  ) %>% gather("Var","Value") %>% separate(Var,c("Var","Func"),sep="_")
+
+
+```
