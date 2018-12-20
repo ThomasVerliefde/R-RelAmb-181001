@@ -97,7 +97,7 @@ df <- df_raw %>%
   ) %>%
   separate(
     fullOthers,
-    c("so","Desc"),
+    c("otherValence","Desc"),
     sep = "_",
     extra = "merge",
     fill = "right"
@@ -108,21 +108,45 @@ df <- df_raw %>%
   spread(
     key = Desc, value = otherOutput
   ) %>%
+  gather(
+    "otherDir",
+    "valDir",
+    matches("^(Dir_)")
+  ) %>%
+  gather(
+    "otherSRI",
+    "valSRI",
+    matches("^(SRI_)")
+  ) %>%
+  gather(
+    "pointTime",
+    "valTime",
+    matches("^(time.)")
+  ) %>%
+  mutate_at(
+    vars(otherDir,otherSRI,pointTime),
+    funs(gsub("(^.{4})|(\\d)","",.))
+  ) %>%
+  separate(
+    otherSRI,
+    c("SRIValence"),
+    sep = "_",
+    extra = "drop",
+    remove=FALSE
+  ) %>%
   rename(
     Answer = answer,
     Prime = prime,
     primeType = primeCat,
     Target = target,
     targetType = targetCat,
+    otherNum = Num,
+    otherRel = Rel,
     RT = time
   ) %>%
   mutate_at(
-    vars(RT,Age,matches("^(time)")),
+    vars(Subject,Trial,RT,Age,otherNum,valDir,valSRI,valTime),
     as.numeric
-  ) %>%
-  mutate_at(
-    vars(Subject,Trial),
-    as.character
   ) %>%
   filter(Block == "experiment") %>% # drop all practice trials
   group_by(Subject) %>%
@@ -161,10 +185,10 @@ df <- df_raw %>%
       grepl("Neg$",primeType) ~ "Neg",
       TRUE ~ "Neutral"
     ),
-    soValence = case_when(
-      grepl("Pos",so) ~ "Pos",
-      grepl("Neg",so) ~ "Neg"
-    ),
+    otherValence = otherValence %>%
+      gsub(
+        "^(other)(Pos|Neg)(\\d)$","\\2",.
+      ),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
       primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
@@ -178,17 +202,34 @@ df <- df_raw %>%
       TRUE ~ FALSE
     ),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
-    baseInclusion = Correct & RT >= 300 & RT <= 3000,
-    fullInclusion = 1 - mean(baseInclusion) < 0.83,
+    speedInclusion = RT >= 300 & RT <= 3000,
+    subjInclusion = 1 - mean(speedInclusion) < 0.83,
       # If we have to exclude more than 83% of the trials of a single participant,
       #  then this participant will be excluded entirely.
-    Inclusion = baseInclusion & fullInclusion,
+    Inclusion = Correct & speedInclusion & subjInclusion,
     logRT = log(RT)
   ) %>%
   ungroup %>%
   arrange(Subject)
 
 ```
+
+```{r Specific Dataframes, options}
+
+df_subj <- df %>%
+  select(
+    Subject,Age,Gender,Language,Handedness,otherValence,otherNames,otherRel,otherNum,otherDir,
+    valDir,SRIValence,otherSRI,valSRI,pointTime,valTime,Accuracy,subjInclusion,Study,Key,FirstOthers
+  ) %>% distinct %>% arrange(Subject)
+
+df_trials <- df %>%
+  select(
+    Subject,Trial,RT,logRT,Prime,primeType,primeValence,Target,targetType,Answer,Correct,
+    speedInclusion,subjInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+  ) %>% distinct %>% arrange(Subject,Trial)
+
+```
+
 
 #######################
 # Demographics & More #
@@ -197,12 +238,12 @@ df <- df_raw %>%
 ```{r Inclusions, options}
 
 df %>% group_by(Subject,Trial) %>% summarize(
-  "incl" = baseInclusion %>% not %>% mean
+  "incl" = speedInclusion %>% not %>% mean
 ) %>% ungroup %$% mean(incl) %>% multiply_by(100) %>% signif(5) %>%
   paste0(.,"% of trials were excluded because they were either incorrectly categorized,\n responed to too quickly (<300ms), or responded to too slowly (>3000ms)") %>%
   cat
 
-df %>% filter(Subject %>% duplicated) %$% sum(fullInclusion %>% not) %>%
+df %>% filter(Subject %>% duplicated) %$% sum(subjInclusion %>% not) %>%
   paste("A total of",.,"participants were fully excluded due to extremes in accuracy and/or latency.") %>%
   cat
 
@@ -215,7 +256,7 @@ df %>% group_by(Subject,Trial) %>% summarize("trialInclusion" = Inclusion %>% me
 
 ```{r Gender; Language; & Handedness, options}
 
-df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% {
+df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>% {
   bind_rows(
     count(., "Var" = "Total"),
     count(., "Var" = Gender),
@@ -233,7 +274,7 @@ df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% {
 
 ```{r Age; Accuracy; & RT, options}
 
-df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>% 
+df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>% 
   summarize_at(
     vars(Age,Accuracy,RT),
     funs(mean,sd,min,max,.args = list(na.rm=T))
@@ -245,13 +286,13 @@ df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
 ```{r Control Variables, options}
 
 df %>% filter(Subject %>% duplicated %>% not) %>%
-  count(Key,FirstOthers,fullInclusion)
+  count(Key,FirstOthers,subjInclusion)
 
 ```
 
 ```{r Timings, options}
 
-df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
+df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
   summarize_at(
     vars(matches("^time")),
     funs(mean,sd,min,max,.args=list(na.rm=T))
@@ -267,7 +308,7 @@ df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
 
 ```{r Study, options}
 
-df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
+df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
   count(Study)
 
 ```
@@ -279,7 +320,9 @@ df %>% filter(Subject %>% duplicated %>% not & fullInclusion) %>%
 ```{r Names, options}
 
 df %>% group_by(otherNames,Subject) %>%
-  summarize %>% tally %>% add_count(n) %>% arrange(nn %>% desc)
+  summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  add_count(n) %>% arrange(nn %>% desc)
 
 ```
 
@@ -298,8 +341,12 @@ df %>% group_by(Rel,otherNames,Subject) %>%
 ## Differences Pos/Neg ##
 #########################
 
-```{r SO, options}
+```{r otherValence, options}
 
 
+
+```
+
+```{r SRI, options}
 
 ```
