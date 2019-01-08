@@ -1,10 +1,11 @@
 ---
 Title:  "Analyses RelAmb"
 Author: "Thomas Verliefde"
-Date:   "2018-12-18""
+Date:   "2019-01-08"
 Output: html_document
 editor_options: 
   chunk_output_type: console
+version: "0.5"
 ---
 
 ```{r setup, options}
@@ -234,7 +235,12 @@ df_subj <- df %>%
 df_others <- df %>%
   select(
     Subject,Gender,otherValence,otherNames,otherRel,otherNum,otherDir,
-    valDir,SRIValence,otherSRI,pointTime,valTime,subjInclusion,Study,Key,FirstOthers
+    valDir,SRIValence,otherSRI,subjInclusion,Study,Key,FirstOthers
+  ) %>% distinct %>% arrange(Subject)
+
+df_time <- df %>%
+  select(
+    Subject,Gender,pointTime,valTime,subjInclusion
   ) %>% distinct %>% arrange(Subject)
 
 df_trials <- df %>%
@@ -311,7 +317,7 @@ df_subj %>% count(Key,FirstOthers,subjInclusion)
 
 ```{r Timings, options}
 
-df_others %>% filter(subjInclusion) %>% group_by(pointTime) %>%
+df_time %>% filter(subjInclusion) %>% group_by(pointTime) %>%
   summarize_at(
     "valTime",
     funs(mean,sd,min,max,.args=list(na.rm=T))
@@ -321,11 +327,11 @@ df_others %>% filter(subjInclusion) %>% group_by(pointTime) %>%
 
 ```{r legacy code, eval=FALSE, include=FALSE}
 
-# This code is only here because I am really proud of it.
+# This code is only here because I am really proud of it, at least the sapply within select.
 # It is no longer run, and is replaced by the chunk above.
-# Code doesn't actually work exactly as intended either...
 
 df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
+  distinct(Subject,pointTime,valTime,subjInclusion) %>%
   spread(pointTime,valTime) %>%
   filter(Subject %>% duplicated %>% not & subjInclusion) %>%
   summarize_at(
