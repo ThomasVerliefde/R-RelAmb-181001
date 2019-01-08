@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 
 lapply(
-  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","magrittr"),
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","lmerTest","magrittr"),
   require,
   character.only = T
 )
@@ -186,7 +186,7 @@ df <- df_raw %>%
       grepl("Neg$",primeType) ~ "Neg",
       TRUE ~ "Neutral"
     ),
-    primeSource = gsub("^(noun|other|letter)(.)$","\\1",primeType),
+    primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType),
     otherValence = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
@@ -213,7 +213,7 @@ df <- df_raw %>%
       TRUE ~ FALSE
     ),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
-    speedInclusion = RT >= 300 & RT <= 3000,
+    speedInclusion = RT >= 300 & RT <= 3000, # Trials with latencies < 300 and > 3000 were excluded
     subjInclusion = 1 - mean(speedInclusion) < 0.83,
       # If we have to exclude more than 83% of the trials of a single participant,
       #  then this participant will be excluded entirely.
@@ -224,6 +224,9 @@ df <- df_raw %>%
   arrange(Subject)
 
 ```
+
+This part creates a few subdataframes, to keep overview and reduce the amount of replicated rows.
+[almost 83000 rows for the full dataset, due to multiple "gatherings"]
 
 ```{r Specific Dataframes, options}
 
@@ -275,7 +278,7 @@ df_subj %$% sum(subjInclusion %>% not) %>%
 
 df_trials %>% group_by(Subject) %>% summarize("trialInclusion" = Inclusion %>% mean) %>%
   summarize(trialInclusion %>% mean) %>% as.numeric %>% multiply_by(100) %>% signif(5) %>%
-  paste("In total,",.,"% of all trials were included in the analyses.") %>%
+  paste("In total,",.,"% of all trials were included.") %>%
   cat
 
 ```
@@ -298,7 +301,7 @@ df_subj %>% filter(subjInclusion) %>% {
 
 ```
 
-```{r Age; Accuracy; & RT, options}
+```{r Age & Accuracy, options}
 
 df_subj %>% filter(subjInclusion) %>% 
   summarize_at(
@@ -311,11 +314,12 @@ df_subj %>% filter(subjInclusion) %>%
 
 ```{r Control Variables, options}
 
-df_subj %>% count(Key,FirstOthers,subjInclusion)
+df_subj %>% count(Key,FirstOthers,subjInclusion) %>%
+  mutate("%" = n %>% divide_by(sum(.)) %>% multiply_by(100))
 
 ```
 
-```{r Timings, options}
+```{r Specific Timings Experiment Duration, options}
 
 df_time %>% filter(subjInclusion) %>% group_by(pointTime) %>%
   summarize_at(
@@ -347,8 +351,7 @@ df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
 
 ```
 
-
-```{r Study, options}
+```{r Study, include=FALSE}
 
 df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
   count(Study)
@@ -358,6 +361,8 @@ df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
 ######################
 # Significant Others #
 ######################
+
+Revise to work with the new df_others
 
 ```{r Names, options}
 
@@ -392,3 +397,32 @@ df %>% group_by(otherRel,otherNames,Subject) %>%
 ```{r SRI, options}
 
 ```
+
+
+
+
+#################
+# Main Analyses #
+#################
+
+Check whether Subject needs to be factorial?
+
+```{r Multilevel, options}
+
+fitNull <- df_trials 
+
+fitBase <- df_trials %>% filter(subjInclusion & Inclusion)
+  lmer(logRT ~ primeType * targetType + (1 | Subject), data = ., REML = TRUE)
+
+fitExtend  
+  
+```
+
+
+
+
+
+
+########################
+# Exploratory Analyses #
+########################
