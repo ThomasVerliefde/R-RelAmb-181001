@@ -66,7 +66,7 @@ Some variables are mutated:
   Many are transformed to strings or numericals
   primeType & targetType get clear non-numerical labels
   primeValence is created to reflect the valence of the primes (regardless of nouns or others)
-  Condition shows congruent or incongruent trials
+  Condition shows congruent or incongruent trials (or base, for neutral stimuli)
   Correct indicates whether the target was correctly classified
   Inclusion sets whether or not the trial should be included
     Note: we should still implement exclusion of low acc participants # tried implementing, not yet ready
@@ -191,6 +191,7 @@ df <- df_raw %>%
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
       primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
+      primeValence == "Neutral" ~ "Base",
       TRUE ~ "Incongruent"
     ),
     lagPrime = case_when(
@@ -226,7 +227,7 @@ df <- df_raw %>%
 ```
 
 This part creates a few subdataframes, to keep overview and reduce the amount of replicated rows.
-[almost 83000 rows for the full dataset, due to multiple "gatherings"]
+[almost 83000 rows for the full dataset with only 2 participants, due to multiple "gatherings"]
 
 ```{r Specific Dataframes, options}
 
@@ -248,7 +249,7 @@ df_time <- df %>%
 
 df_trials <- df %>%
   select(
-    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Answer,Correct,
+    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Condition,Answer,Correct,
     speedInclusion,subjInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 
@@ -405,17 +406,18 @@ df %>% group_by(otherRel,otherNames,Subject) %>%
 # Main Analyses #
 #################
 
-Check whether Subject needs to be factorial?
+Check whether Subject needs to be factorial? (fitting it as a random effect should make clear that it is nonnumeric)
+
+I would like to implement a Bayesian method as well. (e.g. through BayesFactor)
 
 ```{r Multilevel, options}
 
-fitNull <- df_trials 
+df_trials %>% filter(subjInclusion & Inclusion) %>% {
+  fitNull <<- lmer(logRT ~ 1 + (1|Subject), data=., REML = TRUE);
+  fitType <<- lmer(logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE);
+  fitSource <<- lmer(logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE)
+}
 
-fitBase <- df_trials %>% filter(subjInclusion & Inclusion)
-  lmer(logRT ~ primeType * targetType + (1 | Subject), data = ., REML = TRUE)
-
-fitExtend  
-  
 ```
 
 
