@@ -11,9 +11,11 @@ version: "0.5"
 ```{r setup, options}
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
+```
 
+```{r libraries, options}
 lapply(
-  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","lmerTest","pbkrtest","magrittr"),
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","pbkrtest","magrittr"),
   require,
   character.only = T
 )
@@ -184,16 +186,19 @@ df <- df_raw %>%
     primeValence = case_when(
       grepl("Pos$",primeType) ~ "Pos",
       grepl("Neg$",primeType) ~ "Neg",
-      TRUE ~ "Neutral"
-    ),
+      TRUE ~ "Base"
+    ) %>% as.factor,
     primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType) %>% as.factor,
     otherValence = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
       primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
-      primeValence == "Neutral" ~ "Base",
+      primeValence == "Base" ~ "Base",
       TRUE ~ "Incongruent"
     ) %>% as.factor,
+    Condition2 = interaction(
+      primeSource,Condition,drop=TRUE,sep="",lex.order=TRUE
+    ),
     lagPrime = case_when(
       lag(primeType) == primeType~ "Congruent",
       TRUE ~ "Incongruent"),
@@ -249,8 +254,8 @@ df_time <- df %>%
 
 df_trials <- df %>%
   select(
-    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Condition,Answer,Correct,
-    speedInclusion,subjInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Condition,Condition2,
+    Answer,Correct,speedInclusion,subjInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 
 ```
@@ -428,17 +433,19 @@ Also, lmerTest::ls_means() can apply kenward-roger method of degrees of freedom
 
 Note, lmerTest::lmer provides t-tests through Satterthwaite's method
 
+Condition2 instead of primeType * Condition, I'd say
+
 ```{r Multilevel Models, options}
 
 df_trials %>% filter(Inclusion) %>% {
   fitNull <<- lmer(
-    logRT ~ 1 + (1|Target) + (Condition|Subject), data=., REML = TRUE
+    logRT ~ 1 + (1|Target) + (Condition2|Subject), data=., REML = TRUE
   )
   # fitType <<- lmer(
   #   logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE
   # )
   fitJudd <<- lmer(
-    logRT ~ Condition + (1|Target) + (Condition|Subject), data=., REML=TRUE # ADD primeType
+    logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., REML=TRUE
   )
   # fitSource <<- lmer(
   #   logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE
@@ -450,18 +457,19 @@ KRmodcomp(fitJudd, fitNull) # for Kenward-Roger approximate F-test
 
 ```
 
-We probably don't need this.
+Seems to do the same as lmerTest::lmer and then KRmodcomp, although I am not exactly sure
 
-```{r ?Comparisons, include = FALSE}
+```{r Afex, options}
 
-lapply(
-  c(fitNull,fitType,fitJudd,fitSource),
-  function(x) ls_means(x,ddf="Kenward-Roger")
-)
+df_trials %>% filter(Inclusion) %>% {
+  fitAfex <<- mixed(
+    logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., method="KR",
+    check_contrasts=FALSE)
+}
 
+anova(fitAfex)
+summary(fitAfex)
 ```
-
-
 
 
 ########################
