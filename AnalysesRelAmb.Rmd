@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 
 lapply(
-  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","lmerTest","magrittr"),
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","lmerTest","pbkrtest","magrittr"),
   require,
   character.only = T
 )
@@ -175,7 +175,7 @@ df <- df_raw %>%
       `2`= "otherPos",
       `3`= "otherNeg",
       `4`= "letterStr"
-    ),
+    ) %>% as.factor,
     targetType = recode(
       targetType,
       `0` = "adjPos",
@@ -186,14 +186,14 @@ df <- df_raw %>%
       grepl("Neg$",primeType) ~ "Neg",
       TRUE ~ "Neutral"
     ),
-    primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType),
+    primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType) %>% as.factor,
     otherValence = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
       primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
       primeValence == "Neutral" ~ "Base",
       TRUE ~ "Incongruent"
-    ),
+    ) %>% as.factor,
     lagPrime = case_when(
       lag(primeType) == primeType~ "Congruent",
       TRUE ~ "Incongruent"),
@@ -410,17 +410,56 @@ Check whether Subject needs to be factorial? (fitting it as a random effect shou
 
 I would like to implement a Bayesian method as well. (e.g. through BayesFactor)
 
-```{r Multilevel, options}
 
-df_trials %>% filter(subjInclusion & Inclusion) %>% {
-  fitNull <<- lmer(logRT ~ 1 + (1|Subject), data=., REML = TRUE);
-  fitType <<- lmer(logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE);
-  fitSource <<- lmer(logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE)
+Perhaps use multcomp package to setup pairwise comparisons? (through e.g. cld())
+Or with lsmeans or with mvtnorm?
+
+Also perhaps using the afex package (with e.g. mixed() )
+
+Also pbkrtest (with KRmodcomp)
+
+? https://thebiobucket.blogspot.com/2011/06/glmm-with-custom-multiple-comparisons.html#more
+
+Might need glmer instead of lmer?
+
+Through lmerTest we get Satterwaithe?
+Also, lmerTest::ls_means() can apply kenward-roger method of degrees of freedom
+! ls_means requires factors !
+
+Note, lmerTest::lmer provides t-tests through Satterthwaite's method
+
+```{r Multilevel Models, options}
+
+df_trials %>% filter(Inclusion) %>% {
+  fitNull <<- lmer(
+    logRT ~ 1 + (1|Target) + (Condition|Subject), data=., REML = TRUE
+  )
+  # fitType <<- lmer(
+  #   logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE
+  # )
+  fitJudd <<- lmer(
+    logRT ~ Condition + (1|Target) + (Condition|Subject), data=., REML=TRUE # ADD primeType
+  )
+  # fitSource <<- lmer(
+  #   logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE
+  # )
 }
+
+summary(fitJudd)
+KRmodcomp(fitJudd, fitNull) # for Kenward-Roger approximate F-test
 
 ```
 
+We probably don't need this.
 
+```{r ?Comparisons, include = FALSE}
+
+lapply(
+  c(fitNull,fitType,fitJudd,fitSource),
+  function(x) ls_means(x,ddf="Kenward-Roger")
+)
+
+```
 
 
 
