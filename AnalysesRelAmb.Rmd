@@ -15,7 +15,7 @@ rm(list=ls())
 
 ```{r libraries, options}
 lapply(
-  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","pbkrtest","magrittr"),
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans","pbkrtest","magrittr"),
   require,
   character.only = T
 )
@@ -47,7 +47,9 @@ bawl <- "BAWL-R.xls" %>% read_excel %>%
 temp <- tempdir()
 df_raw <- "Data_RelAmb.zip" %>% {
   ldply(
-    .data = unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %$% Name,
+    .data = unzip(.,list=T) %>% # unzip the 
+      filter(grepl("(.csv)$",.$Name)) # Ignore any file/folder that is not a .csv file
+    %$% Name, # Returns 
     .fun = function(x) unzip(.,files=x,exdir=temp) %>% read_csv
   )
 }
@@ -431,29 +433,31 @@ Through lmerTest we get Satterwaithe?
 Also, lmerTest::ls_means() can apply kenward-roger method of degrees of freedom
 ! ls_means requires factors !
 
+should use the new emmeans instead of lsmeans I think
+
 Note, lmerTest::lmer provides t-tests through Satterthwaite's method
 
 Condition2 instead of primeType * Condition, I'd say
 
 ```{r Multilevel Models, options}
 
-df_trials %>% filter(Inclusion) %>% {
-  fitNull <<- lmer(
-    logRT ~ 1 + (1|Target) + (Condition2|Subject), data=., REML = TRUE
-  )
-  # fitType <<- lmer(
-  #   logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE
-  # )
-  fitJudd <<- lmer(
-    logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., REML=TRUE
-  )
-  # fitSource <<- lmer(
-  #   logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE
-  # )
-}
-
-summary(fitJudd)
-KRmodcomp(fitJudd, fitNull) # for Kenward-Roger approximate F-test
+# df_trials %>% filter(Inclusion) %>% {
+#   fitNull <<- lmer(
+#     logRT ~ 1 + (1|Target) + (Condition2|Subject), data=., REML = TRUE
+#   )
+#   # fitType <<- lmer(
+#   #   logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE
+#   # )
+#   fitJudd <<- lmer(
+#     logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., REML=TRUE
+#   )
+#   # fitSource <<- lmer(
+#   #   logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE
+#   # )
+# }
+# 
+# summary(fitJudd)
+# KRmodcomp(fitJudd, fitNull) # for Kenward-Roger approximate F-test
 
 ```
 
@@ -463,12 +467,53 @@ Seems to do the same as lmerTest::lmer and then KRmodcomp, although I am not exa
 
 df_trials %>% filter(Inclusion) %>% {
   fitAfex <<- mixed(
-    logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., method="KR",
+    logRT ~ primeType + (1|Target) + (primeType|Subject), data=., method="KR",
     check_contrasts=FALSE)
 }
 
 anova(fitAfex)
 summary(fitAfex)
+```
+
+```{r label, options}
+
+afex::set_treatment_contrasts()
+df_trials %>% filter(Inclusion & primeSource != "noun") %>% {
+  fitAfex2 <<- mixed(
+    logRT ~ Condition + (1|Target) + (Condition|Subject),
+    data=., method = "KR",
+    check_contrasts = FALSE
+  )
+}
+
+anova(fitAfex2)
+summary(fitAfex2)
+
+afex::set_effects_contrasts()
+df_trials %>% filter(Inclusion & primeValence != "Base") %>% {
+  fitAfex3 <<- mixed(
+    logRT ~ primeType * Condition + (1|Target) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE
+  )
+}
+
+anova(fitAfex3)
+summary(fitAfex3)
+
+emmeans(fitAfex3,"Condition")
+emmeans(fitAfex3,"primeType")
+
+fitAfex3 %>% emmeans(c("primeType","Condition")) %>% contrast(method="pairwise") %>%
+  as_tibble %>%
+  filter(
+    contrast == "nounPos,Congruent - otherPos,Congruent" |
+    contrast == "nounPos,Incongruent - otherPos,Incongruent" |
+    contrast == "nounNeg,Congruent - otherNeg,Congruent" |
+    contrast == "nounNeg,Incongruent - otherNeg,Incongruent"
+  )
+
+# emmeans(fitAfex3, "primeType", by="Condition") # Doesn't test for multiple testing enough!!!
 ```
 
 
