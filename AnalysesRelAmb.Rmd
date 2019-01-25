@@ -464,56 +464,117 @@ Condition2 instead of primeType * Condition, I'd say
 Seems to do the same as lmerTest::lmer and then KRmodcomp, although I am not exactly sure
 
 ```{r Afex, options}
-
-df_trials %>% filter(Inclusion) %>% {
-  fitAfex <<- mixed(
-    logRT ~ primeType + (1|Target) + (primeType|Subject), data=., method="KR",
-    check_contrasts=FALSE)
-}
-
-anova(fitAfex)
-summary(fitAfex)
+# 
+# df_trials %>% filter(Inclusion) %>% {
+#   fitAfex <<- mixed(
+#     logRT ~ primeType + (1|Target) + (primeType|Subject), data=., method="KR",
+#     check_contrasts=FALSE)
+# }
+# 
+# anova(fitAfex)
+# summary(fitAfex)
 ```
 
-```{r label, options}
-
-afex::set_treatment_contrasts()
-df_trials %>% filter(Inclusion & primeSource != "noun") %>% {
-  fitAfex2 <<- mixed(
-    logRT ~ Condition + (1|Target) + (Condition|Subject),
-    data=., method = "KR",
-    check_contrasts = FALSE
-  )
-}
-
-anova(fitAfex2)
-summary(fitAfex2)
+```{r Model with random slope for subject, options}
 
 afex::set_effects_contrasts()
-df_trials %>% filter(Inclusion & primeValence != "Base") %>% {
-  fitAfex3 <<- mixed(
-    logRT ~ primeType * Condition + (1|Target) + (1|Subject),
+fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
+  mixed(
+    logRT ~ primeType * targetType + (1|Target) + (primeType*targetType||Subject),
     data=., method = "KR",
-    check_contrasts = TRUE
+    check_contrasts = TRUE,
+    expand_re=TRUE
   )
 }
 
-anova(fitAfex3)
-summary(fitAfex3)
+fitAfex1
+summary(fitAfex1) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
 
-emmeans(fitAfex3,"Condition")
-emmeans(fitAfex3,"primeType")
+emmeans(fitAfex1,"targetType") 
+emmeans(fitAfex1,"primeType")
+emmeans(fitAfex1,~primeType*targetType)
 
-fitAfex3 %>% emmeans(c("primeType","Condition")) %>% contrast(method="pairwise") %>%
-  as_tibble %>%
+plannedContr1 <- fitAfex1 %>% emmeans(c("primeType","targetType")) %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
   filter(
-    contrast == "nounPos,Congruent - otherPos,Congruent" |
-    contrast == "nounPos,Incongruent - otherPos,Incongruent" |
-    contrast == "nounNeg,Congruent - otherNeg,Congruent" |
-    contrast == "nounNeg,Incongruent - otherNeg,Incongruent"
-  )
+    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
 
-# emmeans(fitAfex3, "primeType", by="Condition") # Doesn't test for multiple testing enough!!!
+plannedContr1
+
+```
+
+```{r model with only random intercept for subject, options}
+
+afex::set_effects_contrasts()
+fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
+  mixed(
+    logRT ~ primeType * targetType + (1|Target) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=TRUE
+  )
+}
+
+fitAfex2
+summary(fitAfex2) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+
+emmeans(fitAfex2,"targetType") 
+emmeans(fitAfex2,"primeType")
+emmeans(fitAfex2,~primeType*targetType)
+
+plannedContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+  filter(
+    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+
+plannedContr2
+
+```
+
+```{r model without random intercept target, only random intercept Subject, options}
+
+afex::set_effects_contrasts()
+fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
+  mixed(
+    logRT ~ primeType * targetType + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=TRUE
+  )
+}
+
+fitAfex3
+summary(fitAfex3) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+
+emmeans(fitAfex3,"targetType") 
+emmeans(fitAfex3,"primeType")
+emmeans(fitAfex3,~primeType*targetType)
+
+plannedContr3 <- fitAfex3 %>% emmeans(c("primeType","targetType")) %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+  filter(
+    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+
+plannedContr3
+
 ```
 
 
