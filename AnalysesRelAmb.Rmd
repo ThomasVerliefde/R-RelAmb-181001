@@ -1,19 +1,23 @@
 ---
-Title:  "Analyses RelAmb"
-Author: "Thomas Verliefde"
-Date:   "2019-01-08"
+Author: Thomas Verliefde
+Date: '2019-01-29'
 Output: html_document
-editor_options: 
+Title: Analyses RelAmb
+editor_options:
   chunk_output_type: console
-version: "0.5"
+# output:
+#   html_document:
+#     df_print: paged
+#   pdf_document: default
+version: '1.0'
 ---
 
-```{r setup, options}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 ```
 
-```{r libraries, options}
+```{r libraries, include=FALSE}
 lapply(
   c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans","pbkrtest","magrittr"),
   require,
@@ -42,7 +46,7 @@ bawl <- "BAWL-R.xls" %>% read_excel %>%
 
 ```
 
-```{r Data_RelAmb.zip, message=FALSE}
+```{r Data_RelAmb.zip, include=FALSE}
 
 temp <- tempdir()
 df_raw <- "Data_RelAmb.zip" %>% {
@@ -249,10 +253,12 @@ df_others <- df %>%
     valDir,SRIValence,otherSRI,subjInclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
-df_time <- df %>%
-  select(
-    Subject,Gender,pointTime,valTime,subjInclusion
-  ) %>% distinct %>% arrange(Subject)
+# df_time <- df %>%
+#   select(
+#     Subject,Gender,pointTime,valTime,subjInclusion
+#   ) %>% distinct %>% arrange(Subject)
+# Due to the values being ',' values (and not '.') there were issues with timings in the .csv files
+# As such, more work will be necessary to actually determine timings decently
 
 df_trials <- df %>%
   select(
@@ -329,11 +335,11 @@ df_subj %>% count(Key,FirstOthers,subjInclusion) %>%
 
 ```{r Specific Timings Experiment Duration, options}
 
-df_time %>% filter(subjInclusion) %>% group_by(pointTime) %>%
-  summarize_at(
-    "valTime",
-    funs(mean,sd,min,max,.args=list(na.rm=T))
-  )
+# df_time %>% filter(subjInclusion) %>% group_by(pointTime) %>%
+#   summarize_at(
+#     "valTime",
+#     funs(mean,sd,min,max,.args=list(na.rm=T))
+#   )
 
 ```
 
@@ -370,7 +376,7 @@ df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
 # Significant Others #
 ######################
 
-Revise to work with the new df_others
+TODO: Revise to work with the df_others instead of df
 
 ```{r Names, options}
 
@@ -413,31 +419,19 @@ df %>% group_by(otherRel,otherNames,Subject) %>%
 # Main Analyses #
 #################
 
-Check whether Subject needs to be factorial? (fitting it as a random effect should make clear that it is nonnumeric)
+```{r Control, options}
 
-I would like to implement a Bayesian method as well. (e.g. through BayesFactor)
+df_trials %>% count(Subject) %$% unique(n) %>%
+  paste("Each subject viewed a total of",.,"trials.")
 
+df_trials %>% filter(Subject == 1) %>% count(primeType)
 
-Perhaps use multcomp package to setup pairwise comparisons? (through e.g. cld())
-Or with lsmeans or with mvtnorm?
+df_trials %>% filter(Subject == 1) %>% count(targetType)
 
-Also perhaps using the afex package (with e.g. mixed() )
+df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 
-Also pbkrtest (with KRmodcomp)
+```
 
-? https://thebiobucket.blogspot.com/2011/06/glmm-with-custom-multiple-comparisons.html#more
-
-Might need glmer instead of lmer?
-
-Through lmerTest we get Satterwaithe?
-Also, lmerTest::ls_means() can apply kenward-roger method of degrees of freedom
-! ls_means requires factors !
-
-should use the new emmeans instead of lsmeans I think
-
-Note, lmerTest::lmer provides t-tests through Satterthwaite's method
-
-Condition2 instead of primeType * Condition, I'd say
 
 ```{r Multilevel Models, options}
 
@@ -461,7 +455,6 @@ Condition2 instead of primeType * Condition, I'd say
 
 ```
 
-Seems to do the same as lmerTest::lmer and then KRmodcomp, although I am not exactly sure
 
 ```{r Afex, options}
 # 
@@ -475,8 +468,8 @@ Seems to do the same as lmerTest::lmer and then KRmodcomp, although I am not exa
 # summary(fitAfex)
 ```
 
-```{r Model with random slope for subject, options}
-
+```{r Model with random slope for subject, cache=TRUE}
+emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) #This may result in large computation times
 afex::set_effects_contrasts()
 fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
   mixed(
@@ -509,7 +502,7 @@ plannedContr1
 
 ```
 
-```{r model with only random intercept for subject, options}
+```{r model with only random intercept for subject, cache=TRUE}
 
 afex::set_effects_contrasts()
 fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
@@ -543,7 +536,7 @@ plannedContr2
 
 ```
 
-```{r model without random intercept target, only random intercept Subject, options}
+```{r model without random intercept target, only random intercept Subject, cache=TRUE}
 
 afex::set_effects_contrasts()
 fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
