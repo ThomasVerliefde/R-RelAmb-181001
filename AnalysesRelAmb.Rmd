@@ -5,10 +5,6 @@ Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
-# output:
-#   html_document:
-#     df_print: paged
-#   pdf_document: default
 version: '1.0'
 ---
 
@@ -469,7 +465,7 @@ df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 ```
 
 ```{r Model with random slope for subject, cache=TRUE}
-emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) #This may result in large computation times
+# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) #Cannot allocate vector of size 383.8 Mb
 afex::set_effects_contrasts()
 fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
   mixed(
@@ -503,7 +499,7 @@ plannedContr1
 ```
 
 ```{r model with only random intercept for subject, cache=TRUE}
-
+emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
 afex::set_effects_contrasts()
 fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
   mixed(
