@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-01-29'
+Date: '2019-02-19'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -10,12 +10,13 @@ version: '1.0'
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list=ls())
+# rm(list=ls())
 ```
 
 ```{r libraries, include=FALSE}
 lapply(
-  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans","pbkrtest","magrittr"),
+  c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans",
+    "pbkrtest","purrr","magrittr","cowplot"),
   require,
   character.only = T
 )
@@ -29,15 +30,15 @@ Make sure the relevant datafiles (Data_RelAmb.zip and BAWL-R.xls) are in the wor
 
 ```{r BAWL-R.xls, options}
 
-bawl <- "BAWL-R.xls" %>% read_excel %>%
-  mutate(
-    WORD_CLASS = recode(
-      WORD_CLASS,
-      "N" = "NOUN",
-      "V" = "VERB",
-      "A" = "ADJ"
-    )
-  )
+# bawl <- "BAWL-R.xls" %>% read_excel %>%
+#   mutate(
+#     WORD_CLASS = recode(
+#       WORD_CLASS,
+#       "N" = "NOUN",
+#       "V" = "VERB",
+#       "A" = "ADJ"
+#     )
+#   )
 
 
 ```
@@ -222,10 +223,15 @@ df <- df_raw %>%
     ),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
     speedInclusion = RT >= 300 & RT <= 3000, # Trials with latencies < 300 and > 3000 were excluded
-    subjInclusion = 1 - mean(speedInclusion) < 0.83,
+    subjInclusion = (1 - mean(speedInclusion)) < 0.83,
       # If we have to exclude more than 83% of the trials of a single participant,
       #  then this participant will be excluded entirely.
-    Inclusion = Correct & speedInclusion & subjInclusion,
+    nameExclusion = Subject == 8 | Subject == 72,
+    # These two participants did not follow instructions, as they did not provide sufficient 
+    #  and actual names for SOs as they were instructed to do.
+    # Specifically, one participant provided us with 'Niemanden' (nobody in German),
+    #  the other participant provided weird nicknames, not proper names.
+    Inclusion = Correct & speedInclusion & subjInclusion & not(nameExclusion),
     logRT = log(RT)
   ) %>%
   ungroup %>%
@@ -259,7 +265,7 @@ df_others <- df %>%
 df_trials <- df %>%
   select(
     Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Condition,Condition2,
-    Answer,Correct,speedInclusion,subjInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+    Answer,Correct,speedInclusion,subjInclusion,nameExclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 
 ```
@@ -344,20 +350,20 @@ df_subj %>% count(Key,FirstOthers,subjInclusion) %>%
 # This code is only here because I am really proud of it, at least the sapply within select.
 # It is no longer run, and is replaced by the chunk above.
 
-df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
-  distinct(Subject,pointTime,valTime,subjInclusion) %>%
-  spread(pointTime,valTime) %>%
-  filter(Subject %>% duplicated %>% not & subjInclusion) %>%
-  summarize_at(
-    vars(matches("^time")),
-    funs(mean,sd,min,max,.args=list(na.rm=T))
-  ) %>% select(
-    sapply(
-      c("Other","Practice","Experiment","Explicit","Demographics","Total"),
-      matches
-    ) # I am actually suprised that this works...
-  ) %>% gather("Var","Value") %>% separate(Var,c("Var","Func"),sep="_") %>%
-  spread(Func,Value) %>% select(Var,mean,sd,min,max)
+# df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
+#   distinct(Subject,pointTime,valTime,subjInclusion) %>%
+#   spread(pointTime,valTime) %>%
+#   filter(Subject %>% duplicated %>% not & subjInclusion) %>%
+#   summarize_at(
+#     vars(matches("^time")),
+#     funs(mean,sd,min,max,.args=list(na.rm=T))
+#   ) %>% select(
+#     sapply(
+#       c("Other","Practice","Experiment","Explicit","Demographics","Total"),
+#       matches
+#     ) # I am actually suprised that this works...
+#   ) %>% gather("Var","Value") %>% separate(Var,c("Var","Func"),sep="_") %>%
+#   spread(Func,Value) %>% select(Var,mean,sd,min,max)
 
 ```
 
@@ -375,18 +381,18 @@ df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
 TODO: Revise to work with the df_others instead of df
 
 ```{r Names, options}
-
-df %>% group_by(otherNames,Subject) %>%
-  summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
-  summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
-  add_count(n) %>% arrange(nn %>% desc)
+# 
+# test<- df %>% group_by(otherNames,Subject) %>%
+#   summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
+#   summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
+#   add_count(n) %>% arrange(nn %>% desc)
 
 ```
 
 ```{r Relations, options}
 
-df %>% group_by(otherRel,otherNames,Subject) %>%
-  summarize %>% ungroup %>% count("Relation_Type" = otherRel)
+# df %>% group_by(otherRel,otherNames,Subject) %>%
+#   summarize %>% ungroup %>% count("Relation_Type" = otherRel)
 
 ```
 
@@ -506,7 +512,7 @@ fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
     logRT ~ primeType * targetType + (1|Target) + (1|Subject),
     data=., method = "KR",
     check_contrasts = TRUE,
-    expand_re=TRUE
+    expand_re=FALSE
   )
 }
 
@@ -515,7 +521,7 @@ summary(fitAfex2) %$% coefficients %>% zapsmall #Neat function that puts very sm
 
 emmeans(fitAfex2,"targetType") 
 emmeans(fitAfex2,"primeType")
-emmeans(fitAfex2,~primeType*targetType)
+plannedMeans2 <- emmeans(fitAfex2,~primeType*targetType)
 
 plannedContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
   contrast(method="revpairwise") %>% as_tibble %>%
@@ -533,7 +539,7 @@ plannedContr2
 ```
 
 ```{r model without random intercept target, only random intercept Subject, cache=TRUE}
-
+emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
 afex::set_effects_contrasts()
 fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
   mixed(
@@ -566,6 +572,39 @@ plannedContr3
 
 ```
 
+############
+## Graphs ##
+############
+
+```{r label, options}
+
+plannedContr2 %>%
+  group_by(cPrimeA,cPrimeB) %>%
+  do(
+    plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
+      geom_col(position="dodge") + ggtitle(paste0(.$cPrimeA,"-",.$cPrimeB)) +
+      labs(x="",y="") +
+      scale_x_discrete(labels=NULL,breaks=NULL) +
+      scale_y_continuous(breaks=seq(-0.06,.12,.02) ,limits=c(-0.03,.13)) +
+      geom_label(aes(label=p.value %>% sprintf("%.4f",.)),position = position_dodge(width=.9))+
+      theme(legend.position="none")
+  ) %>% {
+  plot_grid(plotlist=plots,align="hv") %>%
+  plot_grid(get_legend())
+  }
+  
+  # annotate("text",x=0.52,y=0.97,size=6,label="otherNeg") +
+  # annotate("text",x=0.52,y=0.47,size=6,label="otherPos")
+  
+
+
+
+test1 <- plannedContr2 %>% filter(cPrimeA == "otherPos") %>%
+
+ggplot(plannedContr2,aes(x=cPrimeA,y=estimate)) +
+  geom_col(aes(fill=cPrimeB,colour=cTargetA),position="dodge")
+
+```
 
 ########################
 # Exploratory Analyses #
