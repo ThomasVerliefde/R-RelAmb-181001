@@ -472,40 +472,40 @@ df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 
 ```{r Model with random slope for subject, cache=TRUE}
 # emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) #Cannot allocate vector of size 383.8 Mb
-afex::set_effects_contrasts()
-fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
-  mixed(
-    logRT ~ primeType * targetType + (1|Target) + (primeType*targetType||Subject),
-    data=., method = "KR",
-    check_contrasts = TRUE,
-    expand_re=TRUE
-  )
-}
-
-fitAfex1
-summary(fitAfex1) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-
-emmeans(fitAfex1,"targetType") 
-emmeans(fitAfex1,"primeType")
-emmeans(fitAfex1,~primeType*targetType)
-
-plannedContr1 <- fitAfex1 %>% emmeans(c("primeType","targetType")) %>%
-  contrast(method="revpairwise") %>% as_tibble %>%
-  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
-  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-  filter(
-    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
-  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
-
-plannedContr1
+# afex::set_effects_contrasts()
+# fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
+#   mixed(
+#     logRT ~ primeType * targetType + (1|Target) + (primeType*targetType||Subject),
+#     data=., method = "KR",
+#     check_contrasts = TRUE,
+#     expand_re=TRUE
+#   )
+# }
+# 
+# fitAfex1
+# summary(fitAfex1) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+# 
+# emmeans(fitAfex1,"targetType") 
+# emmeans(fitAfex1,"primeType")
+# emmeans(fitAfex1,~primeType*targetType)
+# 
+# plannedContr1 <- fitAfex1 %>% emmeans(c("primeType","targetType")) %>%
+#   contrast(method="revpairwise") %>% as_tibble %>%
+#   separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+#   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+#   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+#   filter(
+#     ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+#     (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+#     (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+#   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+# 
+# plannedContr1
 
 ```
 
 ```{r model with only random intercept for subject, cache=TRUE}
-emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
+# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
 afex::set_effects_contrasts()
 fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
   mixed(
@@ -519,8 +519,8 @@ fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
 fitAfex2
 summary(fitAfex2) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
 
-emmeans(fitAfex2,"targetType") 
-emmeans(fitAfex2,"primeType")
+emmeans(fitAfex2,"targetType") %>% contrast(method="revpairwise")
+primeContr2 <- emmeans(fitAfex2,"primeType") %>% contrast(method="revpairwise")
 plannedMeans2 <- emmeans(fitAfex2,~primeType*targetType)
 
 plannedContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
@@ -534,41 +534,69 @@ plannedContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
     (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
 
-plannedContr2
-
-```
-
-```{r model without random intercept target, only random intercept Subject, cache=TRUE}
-emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
-afex::set_effects_contrasts()
-fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
-  mixed(
-    logRT ~ primeType * targetType + (1|Subject),
-    data=., method = "KR",
-    check_contrasts = TRUE,
-    expand_re=TRUE
-  )
-}
-
-fitAfex3
-summary(fitAfex3) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-
-emmeans(fitAfex3,"targetType") 
-emmeans(fitAfex3,"primeType")
-emmeans(fitAfex3,~primeType*targetType)
-
-plannedContr3 <- fitAfex3 %>% emmeans(c("primeType","targetType")) %>%
+fullContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
   contrast(method="revpairwise") %>% as_tibble %>%
   separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-  filter(
-    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
-  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+  arrange(cPrimeB,cPrimeA,cTargetA)
 
-plannedContr3
+primeContr2 <- fitAfex2 %>% emmeans("primeType") %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  arrange(contrastA,contrastB)
+
+
+```
+
+```{r label, options}
+
+plannedContr2
+
+fullContr2 %>%
+  filter(cPrimeA==cPrimeB) 
+
+fullContr2 %>%
+  filter((cPrimeA == "otherPos" & cPrimeB == "nounNeg" & cTargetA == "adjNeg" & cTargetB == "adjNeg") | (
+    cPrimeA == "otherNeg" & cPrimeB == "nounPos" & cTargetA == "adjPos" & cTargetB == "adjPos"))
+
+primeContr2
+
+```
+
+
+
+```{r model without random intercept target, only random intercept Subject, cache=TRUE}
+# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
+# afex::set_effects_contrasts()
+# fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
+#   mixed(
+#     logRT ~ primeType * targetType + (1|Subject),
+#     data=., method = "KR",
+#     check_contrasts = TRUE,
+#     expand_re=TRUE
+#   )
+# }
+# 
+# fitAfex3
+# summary(fitAfex3) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+# 
+# emmeans(fitAfex3,"targetType") 
+# emmeans(fitAfex3,"primeType")
+# emmeans(fitAfex3,~primeType*targetType)
+# 
+# plannedContr3 <- fitAfex3 %>% emmeans(c("primeType","targetType")) %>%
+#   contrast(method="revpairwise") %>% as_tibble %>%
+#   separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+#   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+#   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+#   filter(
+#     ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+#     (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+#     (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+#   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+# 
+# plannedContr3
 
 ```
 
@@ -588,21 +616,22 @@ plannedContr2 %>%
       scale_y_continuous(breaks=seq(-0.06,.12,.02) ,limits=c(-0.03,.13)) +
       geom_label(aes(label=p.value %>% sprintf("%.4f",.)),position = position_dodge(width=.9))+
       theme(legend.position="none")
-  ) %>% {
-  plot_grid(plotlist=plots,align="hv") %>%
-  plot_grid(get_legend())
-  }
-  
-  # annotate("text",x=0.52,y=0.97,size=6,label="otherNeg") +
-  # annotate("text",x=0.52,y=0.47,size=6,label="otherPos")
-  
+  ) %$% 
+  plot_grid(
+    plot_grid(plotlist=plots,align="hv"),
+    get_legend(ggplot(plannedContr2,aes(x=cPrimeA,y=estimate,fill=cTargetA))+geom_col()),
+    rel_widths = c(3,.5)
+  )
+```
+
+```{r label, options}
+
+plannedMeans2 %>% as_tibble %>%
+  ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
+  geom_col(position="dodge") +
+  coord_cartesian(ylim=c(6.45,6.7))
 
 
-
-test1 <- plannedContr2 %>% filter(cPrimeA == "otherPos") %>%
-
-ggplot(plannedContr2,aes(x=cPrimeA,y=estimate)) +
-  geom_col(aes(fill=cPrimeB,colour=cTargetA),position="dodge")
 
 ```
 
