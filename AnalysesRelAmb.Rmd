@@ -10,7 +10,7 @@ version: '1.0'
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-# rm(list=ls())
+rm(list=ls())
 ```
 
 ```{r libraries, include=FALSE}
@@ -49,14 +49,92 @@ temp <- tempdir()
 df_raw <- "Data_RelAmb.zip" %>% {
   ldply(
     .data = unzip(.,list=T) %>% # unzip the 
-      filter(grepl("(.csv)$",.$Name)) # Ignore any file/folder that is not a .csv file
-    %$% Name, # Returns 
+      filter(grepl("(.csv)$",.$Name)) %>% # Ignore any file/folder that is not a .csv file
+      arrange(Name %>% desc) %$% Name, # Returns a 'list' containing the relevant .csv filenames
     .fun = function(x) unzip(.,files=x,exdir=temp) %>% read_csv
   )
 }
 rm(temp)
 
 ```
+
+
+```{r label, options}
+
+temp <- tempdir()
+df_test <- "Data_RelAmb.zip" %>% 
+  unzip(.,files=unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1), exdir=temp) %>%
+  read_csv
+rm(temp)
+
+df_test %>% glimpse
+# unzip("Data_RelAmb.zip",list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1)
+
+```
+
+```{r Data_RelAmb.zip, include=FALSE}
+
+temp <- tempdir()
+df_rawTime <- "Data_RelAmb.zip" %>% {
+  ldply(
+    .data = unzip(.,list=T) %>% # unzip the 
+      filter(grepl("(.csv)$",.$Name)) %>% # Ignore any file/folder that is not a .csv file
+      arrange(Name %>% desc) %$% Name, # Returns a 'list' containing the relevant .csv filenames
+    .fun = function(x) unzip(.,files=x,exdir=temp) %>%
+      read_csv(col_names=FALSE,skip=1) %>% select(1,(dim(.)[2]-12):dim(.)[2])
+  ) %>% select(sort(current_vars())) %>% {
+    bind_cols(
+      filter(.,X756 %>% is.na) %>% select(-X756) %>% t %>% as_tibble,
+      filter(.,X769 %>% is.na) %>% select(-X769) %>% t %>% as_tibble
+    ) %>% t %>% as_tibble %>% select(-14) %>% mutate_at(vars(-1),as.numeric) %>%
+      mutate_at(vars(-1),function(x) format(x,scientific=FALSE))
+  }# %>% unite(col = timeOther,2,3,sep=".")
+}
+rm(temp)
+
+# A <- df_rawTime %>% filter(X756 %>% is.na) %>% select(-X756) %>% t %>% as_tibble
+# A <- df_rawTime %>% filter(X756 %>% is.na) %>% select(-X756) %>% gather(var,val,2:ncol(.)) %>% spread()
+# B <- df_rawTime %>% filter(X769 %>% is.na) %>% select(-X769) %>% t %>% as_tibble
+# 
+# test <- bind_cols(A,B) %>% t
+
+# df_TEST %>% filter(X756 %>% is.na) %>%
+#     select(-X756) %>%
+#   rename_all(~ c(
+#     "timeOther_1",
+#     "timeOther_2",
+#     "timePractice_1",
+#     "timePractice_2",
+#     "timeExperiment_1",
+#     "timeExperiment_2",
+#     "timeExplicit_1",
+#     "timeExplicit_2",
+#     "timeDemographics_1",
+#     "timeDemographics_2",
+#     "timeTotal_1",
+#     "timeTotal_2",
+#     "hostName"))
+# 
+# df_TEST %>% filter(X756 %>% is.na %>% not) %>%
+#   select(-X769) %>%
+#   rename_all(~ c(
+#     "timeOther_1",
+#     "timeOther_2",
+#     "timePractice_1",
+#     "timePractice_2",
+#     "timeExperiment_1",
+#     "timeExperiment_2",
+#     "timeExplicit_1",
+#     "timeExplicit_2",
+#     "timeDemographics_1",
+#     "timeDemographics_2",
+#     "timeTotal_1",
+#     "timeTotal_2",
+#     "hostName"))
+
+  
+```
+
 
 
 This part cleans the data up a lot, and puts it in an useable long format.
@@ -81,7 +159,7 @@ Some variables are mutated:
 
 df <- df_raw %>% 
   select(
-    -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials,hostName)
+    -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials)
   ) %>%
   gather(
     "fullTrials",
@@ -396,10 +474,6 @@ TODO: Revise to work with the df_others instead of df
 
 ```
 
-```{r ???, options}
-
-```
-
 #########################
 ## Differences Pos/Neg ##
 #########################
@@ -433,6 +507,79 @@ df_trials %>% filter(Subject == 1) %>% count(targetType)
 df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 
 ```
+
+```{r label, options}
+
+df_trials %>% filter(Inclusion) %>% count(primeType,targetType,Subject) %>% count(n)
+
+```
+
+
+
+
+```{r model with only random intercept for subject, cache=TRUE}
+# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
+afex::set_effects_contrasts()
+fitAfex <- df_trials %>% filter(Inclusion) %>% {
+  mixed(
+    logRT ~ primeType * targetType + (1|Target) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=FALSE
+  )
+}
+
+fitAfex
+
+summary(fitAfex) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+
+emmeans(fitAfex,"targetType") %>% contrast(method="revpairwise")
+primeContr <- emmeans(fitAfex,"primeType") %>% contrast(method="revpairwise")
+plannedMeans <- emmeans(fitAfex,~primeType*targetType)
+
+plannedContr <- fitAfex %>% emmeans(c("primeType","targetType")) %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+  filter(
+    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
+    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
+    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
+
+fullContr <- fitAfex %>% emmeans(c("primeType","targetType")) %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
+  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
+  arrange(cPrimeB,cPrimeA,cTargetA)
+
+primeContr <- fitAfex %>% emmeans("primeType") %>%
+  contrast(method="revpairwise") %>% as_tibble %>%
+  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
+  arrange(contrastA,contrastB)
+
+
+```
+
+```{r label, options}
+
+plannedContr
+
+fullContr %>%
+  filter(cPrimeA==cPrimeB) 
+
+fullContr %>%
+  filter((cPrimeA == "otherPos" & cPrimeB == "nounNeg" & cTargetA == "adjNeg" & cTargetB == "adjNeg") | (
+    cPrimeA == "otherNeg" & cPrimeB == "nounPos" & cTargetA == "adjPos" & cTargetB == "adjPos"))
+
+primeContr
+
+```
+
+
+
 
 
 ```{r Multilevel Models, options}
@@ -501,66 +648,6 @@ df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 #   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
 # 
 # plannedContr1
-
-```
-
-```{r model with only random intercept for subject, cache=TRUE}
-# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
-afex::set_effects_contrasts()
-fitAfex2 <- df_trials %>% filter(Inclusion) %>% {
-  mixed(
-    logRT ~ primeType * targetType + (1|Target) + (1|Subject),
-    data=., method = "KR",
-    check_contrasts = TRUE,
-    expand_re=FALSE
-  )
-}
-
-fitAfex2
-summary(fitAfex2) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-
-emmeans(fitAfex2,"targetType") %>% contrast(method="revpairwise")
-primeContr2 <- emmeans(fitAfex2,"primeType") %>% contrast(method="revpairwise")
-plannedMeans2 <- emmeans(fitAfex2,~primeType*targetType)
-
-plannedContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
-  contrast(method="revpairwise") %>% as_tibble %>%
-  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
-  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-  filter(
-    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
-  ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
-
-fullContr2 <- fitAfex2 %>% emmeans(c("primeType","targetType")) %>%
-  contrast(method="revpairwise") %>% as_tibble %>%
-  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-  separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
-  separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-  arrange(cPrimeB,cPrimeA,cTargetA)
-
-primeContr2 <- fitAfex2 %>% emmeans("primeType") %>%
-  contrast(method="revpairwise") %>% as_tibble %>%
-  separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-  arrange(contrastA,contrastB)
-
-
-```
-
-```{r label, options}
-
-plannedContr2
-
-fullContr2 %>%
-  filter(cPrimeA==cPrimeB) 
-
-fullContr2 %>%
-  filter((cPrimeA == "otherPos" & cPrimeB == "nounNeg" & cTargetA == "adjNeg" & cTargetB == "adjNeg") | (
-    cPrimeA == "otherNeg" & cPrimeB == "nounPos" & cTargetA == "adjPos" & cTargetB == "adjPos"))
-
-primeContr2
 
 ```
 
