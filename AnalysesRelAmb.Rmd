@@ -1,11 +1,11 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-02-19'
+Date: '2019-03-01'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
-version: '1.0'
+version: '1.1'
 ---
 
 ```{r setup, include=FALSE}
@@ -86,53 +86,26 @@ df_rawTime <- "Data_RelAmb.zip" %>% {
     bind_cols(
       filter(.,X756 %>% is.na) %>% select(-X756) %>% t %>% as_tibble,
       filter(.,X769 %>% is.na) %>% select(-X769) %>% t %>% as_tibble
-    ) %>% t %>% as_tibble %>% select(-14) %>% mutate_at(vars(-1),as.numeric) %>%
-      mutate_at(vars(-1),function(x) format(x,scientific=FALSE))
-  }# %>% unite(col = timeOther,2,3,sep=".")
+    ) } %>% t %>% as_tibble %>% select(-14) %>% mutate_at(vars(-1),as.numeric) %>%
+      mutate_at(vars(-1),function(x) format(x,scientific=FALSE)) %>%
+    mutate_at(vars(seq(3,13,2)), function(x) gsub("( *)(\\d+)",".\\2",x)) %>%
+    mutate_all(as.numeric) %$% 
+      bind_cols(
+        select(.,V1),
+        list(extract(.,seq(2,12,2)),extract(.,seq(3,13,2))) %>% pmap(add) %>% as_tibble
+      ) %>%
+    rename(
+      Subject = V1,
+      timeOther = V2,
+      timePractice = V4,
+      timeExperiment = V6,
+      timeExplicit = V8,
+      timeDemographics = V10,
+      timeTotal = V12
+    )
 }
 rm(temp)
 
-# A <- df_rawTime %>% filter(X756 %>% is.na) %>% select(-X756) %>% t %>% as_tibble
-# A <- df_rawTime %>% filter(X756 %>% is.na) %>% select(-X756) %>% gather(var,val,2:ncol(.)) %>% spread()
-# B <- df_rawTime %>% filter(X769 %>% is.na) %>% select(-X769) %>% t %>% as_tibble
-# 
-# test <- bind_cols(A,B) %>% t
-
-# df_TEST %>% filter(X756 %>% is.na) %>%
-#     select(-X756) %>%
-#   rename_all(~ c(
-#     "timeOther_1",
-#     "timeOther_2",
-#     "timePractice_1",
-#     "timePractice_2",
-#     "timeExperiment_1",
-#     "timeExperiment_2",
-#     "timeExplicit_1",
-#     "timeExplicit_2",
-#     "timeDemographics_1",
-#     "timeDemographics_2",
-#     "timeTotal_1",
-#     "timeTotal_2",
-#     "hostName"))
-# 
-# df_TEST %>% filter(X756 %>% is.na %>% not) %>%
-#   select(-X769) %>%
-#   rename_all(~ c(
-#     "timeOther_1",
-#     "timeOther_2",
-#     "timePractice_1",
-#     "timePractice_2",
-#     "timeExperiment_1",
-#     "timeExperiment_2",
-#     "timeExplicit_1",
-#     "timeExplicit_2",
-#     "timeDemographics_1",
-#     "timeDemographics_2",
-#     "timeTotal_1",
-#     "timeTotal_2",
-#     "hostName"))
-
-  
 ```
 
 
@@ -159,7 +132,7 @@ Some variables are mutated:
 
 df <- df_raw %>% 
   select(
-    -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials)
+    -c(practicePrimes,practiceTrials,experimentPrimes,experimentTrials,timeOther:dim(.)[2])
   ) %>%
   gather(
     "fullTrials",
@@ -202,13 +175,8 @@ df <- df_raw %>%
     "valSRI",
     matches("^(SRI_)")
   ) %>%
-  gather(
-    "pointTime",
-    "valTime",
-    matches("^(time.)")
-  ) %>%
   mutate_at(
-    vars(otherDir,otherSRI,pointTime),
+    vars(otherDir,otherSRI),
     funs(gsub("(^.{4})|(\\d)","",.))
   ) %>%
   separate(
@@ -229,7 +197,7 @@ df <- df_raw %>%
     RT = time
   ) %>%
   mutate_at(
-    vars(Subject,Trial,RT,Age,otherNum,valDir,valSRI,valTime),
+    vars(Subject,Trial,RT,Age,otherNum,valDir,valSRI),
     as.numeric
   ) %>%
   filter(Block == "experiment") %>% # drop all practice trials
@@ -301,7 +269,7 @@ df <- df_raw %>%
     ),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
     speedInclusion = RT >= 300 & RT <= 3000, # Trials with latencies < 300 and > 3000 were excluded
-    subjInclusion = (1 - mean(speedInclusion)) < 0.83,
+    accInclusion = (1 - mean(speedInclusion)) < 0.83,
       # If we have to exclude more than 83% of the trials of a single participant,
       #  then this participant will be excluded entirely.
     nameExclusion = Subject == 8 | Subject == 72,
@@ -309,7 +277,8 @@ df <- df_raw %>%
     #  and actual names for SOs as they were instructed to do.
     # Specifically, one participant provided us with 'Niemanden' (nobody in German),
     #  the other participant provided weird nicknames, not proper names.
-    Inclusion = Correct & speedInclusion & subjInclusion & not(nameExclusion),
+    subjExclusion = not(accInclusion) | nameExclusion,
+    Inclusion = Correct & speedInclusion & accInclusion & not(nameExclusion),
     logRT = log(RT)
   ) %>%
   ungroup %>%
@@ -324,26 +293,26 @@ This part creates a few subdataframes, to keep overview and reduce the amount of
 
 df_subj <- df %>%
   select(
-    Subject,Age,Gender,Language,Handedness,Accuracy,subjInclusion,Study,Key,FirstOthers
+    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
 df_others <- df %>%
   select(
     Subject,Gender,otherValence,otherNames,otherRel,otherNum,otherDir,
-    valDir,SRIValence,otherSRI,subjInclusion,Study,Key,FirstOthers
+    valDir,SRIValence,otherSRI,subjExclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
-# df_time <- df %>%
-#   select(
-#     Subject,Gender,pointTime,valTime,subjInclusion
-#   ) %>% distinct %>% arrange(Subject)
-# Due to the values being ',' values (and not '.') there were issues with timings in the .csv files
-# As such, more work will be necessary to actually determine timings decently
+df_time <- df %>%
+  select(
+    Subject,Gender,subjExclusion
+  ) %>% distinct %>% arrange(Subject) %>%
+  full_join(df_rawTime,by="Subject")
 
 df_trials <- df %>%
   select(
-    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,Condition,Condition2,
-    Answer,Correct,speedInclusion,subjInclusion,nameExclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+    Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,
+    Condition,Condition2,Answer,Correct,speedInclusion,accInclusion,subjExclusion,
+    nameExclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 
 ```
