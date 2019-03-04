@@ -61,13 +61,13 @@ rm(temp)
 
 ```{r label, options}
 
-temp <- tempdir()
-df_test <- "Data_RelAmb.zip" %>% 
-  unzip(.,files=unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1), exdir=temp) %>%
-  read_csv
-rm(temp)
-
-df_test %>% glimpse
+# temp <- tempdir()
+# df_test <- "Data_RelAmb.zip" %>% 
+#   unzip(.,files=unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1), exdir=temp) %>%
+#   read_csv
+# rm(temp)
+# 
+# df_test %>% glimpse
 # unzip("Data_RelAmb.zip",list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1)
 
 ```
@@ -293,7 +293,7 @@ This part creates a few subdataframes, to keep overview and reduce the amount of
 
 df_subj <- df %>%
   select(
-    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,Study,Key,FirstOthers
+    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,accInclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
 df_others <- df %>%
@@ -304,7 +304,7 @@ df_others <- df %>%
 
 df_time <- df %>%
   select(
-    Subject,Gender,subjExclusion
+    Subject,Gender,subjExclusion,accInclusion,Accuracy
   ) %>% distinct %>% arrange(Subject) %>%
   full_join(df_rawTime,by="Subject")
 
@@ -335,20 +335,24 @@ df_trials %>% group_by(Subject) %>% summarize(
   paste0(.,"% of trials were excluded because the response latencies were either too short (<300ms), or too long (>3000ms)") %>%
   cat
 
-df_subj %$% sum(subjInclusion %>% not) %>%
+df_subj %$% sum(accInclusion %>% not) %>%
   paste("A total of",.,"participants were fully excluded due to extremes in accuracy and/or latency.") %>%
+  cat
+
+df_subj %$% sum(subjExclusion) %>%
+  paste("A total of",.,"participants were fully excluded due to not following instructions.") %>%
   cat
 
 df_trials %>% group_by(Subject) %>% summarize("trialInclusion" = Inclusion %>% mean) %>%
   summarize(trialInclusion %>% mean) %>% as.numeric %>% multiply_by(100) %>% signif(5) %>%
-  paste("In total,",.,"% of all trials were included.") %>%
+  paste0("In total, ",.,"% of all trials were included.") %>%
   cat
 
 ```
 
 ```{r Gender; Language; & Handedness, options}
 
-df_subj %>% filter(subjInclusion) %>% {
+df_subj %>% filter(accInclusion & !subjExclusion) %>% {
   bind_rows(
     count(., "Var" = "Total"),
     count(., "Var" = Gender),
@@ -366,36 +370,40 @@ df_subj %>% filter(subjInclusion) %>% {
 
 ```{r Age & Accuracy, options}
 
-df_subj %>% filter(subjInclusion) %>% 
+df_subj %>% filter(accInclusion & !subjExclusion) %>% 
   summarize_at(
     vars(Age,Accuracy),
-    funs(mean,sd,min,max,.args = list(na.rm=T))
-  ) %>% gather("Var","Value") %>% arrange(Var) %>% separate(Var,c("Var","Func"),sep="_") %>%
-  spread(Func,Value) %>% select(Var,mean,sd,min,max)
+    funs(mean,sd,min,max,median,.args = list(na.rm=T))
+  ) %>% gather("Var","Value") %>%
+  separate(Var,c("Var","Func"),sep="_") %>%
+  spread(Func,Value) %>% select(Var,mean,sd,min,max,median) %>% as.data.frame
 
 ```
 
 ```{r Control Variables, options}
 
-df_subj %>% count(Key,FirstOthers,subjInclusion) %>%
+df_subj %>% filter(accInclusion & !subjExclusion) %>% count(Key,FirstOthers) %>%
   mutate("%" = n %>% divide_by(sum(.)) %>% multiply_by(100))
 
 ```
 
 ```{r Specific Timings Experiment Duration, options}
 
-# df_time %>% filter(subjInclusion) %>% group_by(pointTime) %>%
-#   summarize_at(
-#     "valTime",
-#     funs(mean,sd,min,max,.args=list(na.rm=T))
-#   )
+df_time %>% filter(accInclusion & !subjExclusion) %>%
+  summarize_at(
+    vars(starts_with("time")),
+    funs(mean,sd,min,max,.args=list(na.rm=T))
+  ) %>% gather("Var","Value") %>%
+  separate(Var,c("Var","Func"),sep="_") %>%
+  spread(Func,Value) %>% select(Var,mean,sd,min,max) %>%
+  slice(c(4,5,2,3,1,6)) %>% as.data.frame
 
 ```
 
 ```{r legacy code, eval=FALSE, include=FALSE}
 
 # This code is only here because I am really proud of it, at least the sapply within select.
-# It is no longer run, and is replaced by the chunk above.
+# It is utterly outdated
 
 # df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
 #   distinct(Subject,pointTime,valTime,subjInclusion) %>%
@@ -414,34 +422,69 @@ df_subj %>% count(Key,FirstOthers,subjInclusion) %>%
 
 ```
 
-```{r Study, include=FALSE}
-
-df %>% filter(Subject %>% duplicated %>% not & subjInclusion) %>%
-  count(Study)
-
-```
-
 ######################
 # Significant Others #
 ######################
 
-TODO: Revise to work with the df_others instead of df
 
 ```{r Names, options}
-# 
-# test<- df %>% group_by(otherNames,Subject) %>%
-#   summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
-#   summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
-#   add_count(n) %>% arrange(nn %>% desc)
+
+test <- df %>% group_by(otherNames,Subject) %>%
+  summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  add_count(n) %>% arrange(nn %>% desc)
+
+df_others %>% group_by(otherNames,Subject) %>%
+  summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  summarize("n" = n(), "otherNum" = otherNum %>% mean(na.rm=T))
 
 ```
+
+```{r Repeated Names between Participants, options}
+
+# The following code shows a list of all names used by our included participants
+#View(df_others %>% filter(subjExclusion) %>% distinct(otherNames) %>% arrange(otherNames))
+
+df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% count(n)
+
+df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% filter(n > 1) %>% arrange(desc(n))
+
+```
+
+Comments, by checking all the names, there are a few issues:
+
+Clearly not names:
+Derkleine, Derwächter, Niemanden
+
+Probably family names, instead of first names:
+Schindler, Stepputtis, Waltraut, Kopp
+
+```{r label, options}
+
+df_others %>%
+  filter(otherNames %in% c("Derkleine","Derwächter","Niemanden","Schindler","Stepputtis","Waltraut","Kopp")) %>%
+  distinct(Subject,otherNames,otherRel)
+
+```
+
+The participants who provided the three items that are clearly not names were excluded.
+
 
 ```{r Relations, options}
 
 # df %>% group_by(otherRel,otherNames,Subject) %>%
 #   summarize %>% ungroup %>% count("Relation_Type" = otherRel)
 
+df_others %>% distinct(Subject,otherRel) %>%
+  count(otherRel) %T>% View
+
+df_others %>%
+  filter(otherRel %in% c("Schmarotzer","KrankerTeufel")) %>%
+  distinct(Subject,otherNames,otherRel)
+
 ```
+
+The two items clearly not relational descriptions ("Schmarotzer" and "KrankerTeufel", German swearwords) belong to the participant who also provided non-name items, and as such already is excluded.
 
 #########################
 ## Differences Pos/Neg ##
