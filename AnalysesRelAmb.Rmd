@@ -238,7 +238,7 @@ df <- df_raw %>%
       TRUE ~ "Base"
     ) %>% as.factor,
     primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType) %>% as.factor,
-    otherValence = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
+    otherValence2 = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
     Condition = case_when(
       primeValence == "Pos" & targetType == "adjPos" ~ "Congruent",
       primeValence == "Neg" & targetType == "adjNeg" ~ "Congruent",
@@ -298,9 +298,12 @@ df_subj <- df %>% filter(Block == "experiment") %>%
 
 df_others <- df %>% filter(Block == "experiment") %>%
   select(
-    Subject,Gender,otherValence,otherNames,otherRel,otherNum,otherDir,
-    valDir,SRIValence,otherSRI,subjExclusion,Study,Key,FirstOthers
+    Subject,Gender,otherValence,otherValence2,otherNames,otherRel,otherNum,otherDir,
+    valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
+
+df_val <- df_others %>% filter(subjExclusion %>% not) %>%
+  distinct(Subject,otherValence,otherValence2,otherDir,valDir,SRIValence,otherSRI,valSRI)
 
 df_time <- df %>% filter(Block == "experiment") %>%
   select(
@@ -446,6 +449,14 @@ df_others %>% group_by(otherNames,Subject) %>% filter(!is.na(otherNum)) %>%
 
 ```
 
+```{r repeated names within participants, options}
+
+df_others %>% distinct(otherNames,Subject) %>%
+  group_by(Subject) %>%
+  filter(otherNames %>% substr(1,1) %>% {or(duplicated(.),duplicated(.,fromLast=T))}) # %T>% View
+
+```
+
 ```{r Repeated Names between Participants, options}
 
 # The following code shows a list of all names used by our included participants
@@ -456,6 +467,9 @@ df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% count(n)
 df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% filter(n > 1) %>% arrange(desc(n))
 
 ```
+
+
+
 
 Comments, by checking all the names, there are a few issues:
 
@@ -496,18 +510,125 @@ The two items clearly not relational descriptions ("Schmarotzer" and "KrankerTeu
 ## Differences Pos/Neg ##
 #########################
 
-```{r otherValence, options}
+```{r Direct Measures of Ambivalence, options}
 
-
+df_val %>% group_by(otherValence,otherDir) %>%
+  summarize(avgDirect = valDir %>% mean)
 
 ```
+
+```{r mixed model, options}
+
+afex::set_effects_contrasts()
+fitDirect <- df_val %>% 
+  mixed(
+    valDir ~ otherDir * otherValence2 + (1|otherValence) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=FALSE
+  )
+
+
+fitDirect
+
+summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+
+emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
+emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
+emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
+compDirect <- emmeans(fitDirect,~otherDir*otherValence2) %>% as_tibble
+
+```
+
+```{r graphics, options}
+compDirect %>% 
+  ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  guides(fill=guide_legend(reverse=TRUE)) +
+  labs(x="Direct Measure",y="Avg Score [0-100]",fill="SO Valence") +
+  scale_y_continuous(limits = c(0,100))
+
+```
+
 
 ```{r SRI, options}
 
+df_val %>% group_by(otherValence2,SRIValence) %>%
+  summarize(avgSRI=mean(valSRI))
+
 ```
 
+```{r mixed models, options}
 
+afex::set_effects_contrasts()
+fitSRI <- df_val %>%
+  mixed(
+    valSRI ~ SRIValence * otherValence2 + (1|otherSRI) + (1|Subject) + (1|otherValence),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=FALSE
+  )
 
+fitSRI
+
+summary(fitSRI) %$% coefficients %>% zapsmall
+
+emmeans(fitSRI,"SRIValence") %>% contrast(method="revpairwise")
+emmeans(fitSRI,"otherValence2") %>% contrast(method="revpairwise")
+emmeans(fitSRI, ~SRIValence * otherValence2) %>% contrast(method="revpairwise")
+compSRI <- emmeans(fitSRI, ~SRIValence * otherValence2) %>% as_tibble
+
+```
+
+```{r graphics, options}
+compSRI %>% 
+  ggplot(aes(x=SRIValence,y=emmean,fill = otherValence2)) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  guides(fill=guide_legend(reverse=TRUE)) +
+  labs(x="SRI Valence",y="Avg SRI [1-6]",fill="SO Valence") +
+  scale_y_continuous(limits = c(0,6))
+
+```
+
+###########
+# Stimuli #
+###########
+
+The positive adjective targets were:
+BELIEBT GENIAL GESUND LEBENDIG OPTIMAL PERFEKT SONNIG SUPER
+
+The negative adjective targets were:
+BRUTAL EINSAM ELEND GRAUSAM ILLEGAL KRANK TRAGISCH TRAURIG
+
+```{r Targets, options}
+
+# bawlTargets <- bawl %>% 
+#   filter(
+#     WORD %in% c("BELIEBT","GENIAL","GESUND","LEBENDIG","OPTIMAL","PERFEKT","SONNIG","SUPER") |
+#       WORD %in% c("BRUTAL","EINSAM","ELEND","GRAUSAM","ILLEGAL","KRANK","TRAGISCH","TRAURIG")
+#   ) %>% mutate(POSITIVE = EMO_MEAN > 0) %>%
+#   select(WORD,POSITIVE,EMO_MEAN,EMO_STD,AROUSAL_MEAN,AROUSAL_STD,IMAGE_MEAN,IMAGE_STD,LETTERS,`Ftot/1MIL`) %>%
+#   arrange(POSITIVE,WORD)
+
+```
+
+The positive noun primes were:
+Mut Lust Glück Freude Frieden Hoffnung Vertrauen Wochenende
+
+The negative noun primes were:
+Not Leid Feind Streit Drohung Abschied Gefängnis Verbrechen
+
+```{r Primes, options}
+
+# bawlPrimes <- bawl %>% 
+#   filter(
+#     WORD_LOWER %in% c("mut","lust","glück","freude","frieden","hoffnung","vertrauen","wochenende") |
+#       WORD_LOWER %in% c("not","leid","feind","streit","drohung","abschied","gefängnis","verbrechen")
+#   ) %>% mutate(POSITIVE = EMO_MEAN > 0) %>%
+#   select(WORD,POSITIVE,EMO_MEAN,EMO_STD,AROUSAL_MEAN,AROUSAL_STD,IMAGE_MEAN,IMAGE_STD,LETTERS,`Ftot/1MIL`) %>%
+#   arrange(POSITIVE,WORD)
+
+```
 
 #################
 # Main Analyses #
@@ -596,122 +717,13 @@ primeContr
 
 ```
 
-
-
-
-
-```{r Multilevel Models, options}
-
-# df_trials %>% filter(Inclusion) %>% {
-#   fitNull <<- lmer(
-#     logRT ~ 1 + (1|Target) + (Condition2|Subject), data=., REML = TRUE
-#   )
-#   # fitType <<- lmer(
-#   #   logRT ~ primeType * Condition + (1|Subject), data=., REML=TRUE
-#   # )
-#   fitJudd <<- lmer(
-#     logRT ~ Condition2 + (1|Target) + (Condition2|Subject), data=., REML=TRUE
-#   )
-#   # fitSource <<- lmer(
-#   #   logRT ~ primeSource * Condition + (1|Subject), data=., REML=TRUE
-#   # )
-# }
-# 
-# summary(fitJudd)
-# KRmodcomp(fitJudd, fitNull) # for Kenward-Roger approximate F-test
-
-```
-
-
-```{r Afex, options}
-# 
-# df_trials %>% filter(Inclusion) %>% {
-#   fitAfex <<- mixed(
-#     logRT ~ primeType + (1|Target) + (primeType|Subject), data=., method="KR",
-#     check_contrasts=FALSE)
-# }
-# 
-# anova(fitAfex)
-# summary(fitAfex)
-```
-
-```{r Model with random slope for subject, cache=TRUE}
-# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) #Cannot allocate vector of size 383.8 Mb
-# afex::set_effects_contrasts()
-# fitAfex1 <- df_trials %>% filter(Inclusion) %>% {
-#   mixed(
-#     logRT ~ primeType * targetType + (1|Target) + (primeType*targetType||Subject),
-#     data=., method = "KR",
-#     check_contrasts = TRUE,
-#     expand_re=TRUE
-#   )
-# }
-# 
-# fitAfex1
-# summary(fitAfex1) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-# 
-# emmeans(fitAfex1,"targetType") 
-# emmeans(fitAfex1,"primeType")
-# emmeans(fitAfex1,~primeType*targetType)
-# 
-# plannedContr1 <- fitAfex1 %>% emmeans(c("primeType","targetType")) %>%
-#   contrast(method="revpairwise") %>% as_tibble %>%
-#   separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-#   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
-#   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-#   filter(
-#     ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-#     (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-#     (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
-#   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
-# 
-# plannedContr1
-
-```
-
-
-
-```{r model without random intercept target, only random intercept Subject, cache=TRUE}
-# emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
-# afex::set_effects_contrasts()
-# fitAfex3 <- df_trials %>% filter(Inclusion) %>% {
-#   mixed(
-#     logRT ~ primeType * targetType + (1|Subject),
-#     data=., method = "KR",
-#     check_contrasts = TRUE,
-#     expand_re=TRUE
-#   )
-# }
-# 
-# fitAfex3
-# summary(fitAfex3) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-# 
-# emmeans(fitAfex3,"targetType") 
-# emmeans(fitAfex3,"primeType")
-# emmeans(fitAfex3,~primeType*targetType)
-# 
-# plannedContr3 <- fitAfex3 %>% emmeans(c("primeType","targetType")) %>%
-#   contrast(method="revpairwise") %>% as_tibble %>%
-#   separate(contrast,c("contrastA","contrastB"),sep=" - ") %>%
-#   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
-#   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
-#   filter(
-#     ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-#     (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-#     (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
-#   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
-# 
-# plannedContr3
-
-```
-
 ############
 ## Graphs ##
 ############
 
 ```{r label, options}
 
-plannedContr2 %>%
+plannedContr %>%
   group_by(cPrimeA,cPrimeB) %>%
   do(
     plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
@@ -724,14 +736,14 @@ plannedContr2 %>%
   ) %$% 
   plot_grid(
     plot_grid(plotlist=plots,align="hv"),
-    get_legend(ggplot(plannedContr2,aes(x=cPrimeA,y=estimate,fill=cTargetA))+geom_col()),
+    get_legend(ggplot(plannedContr,aes(x=cPrimeA,y=estimate,fill=cTargetA))+geom_col()),
     rel_widths = c(3,.5)
   )
 ```
 
 ```{r label, options}
 
-plannedMeans2 %>% as_tibble %>%
+plannedMeans %>% as_tibble %>%
   ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
   geom_col(position="dodge") +
   coord_cartesian(ylim=c(6.45,6.7))
