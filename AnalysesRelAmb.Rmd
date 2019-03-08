@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-05'
+Date: '2019-03-08'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -59,7 +59,7 @@ rm(temp)
 ```
 
 
-```{r label, options}
+```{r Single File Extract, include = FALSE}
 
 # temp <- tempdir()
 # df_test <- "Data_RelAmb.zip" %>% 
@@ -200,7 +200,6 @@ df <- df_raw %>%
     vars(Subject,Trial,RT,Age,otherNum,valDir,valSRI),
     as.numeric
   ) %>%
-  # filter(Block == "experiment") %>% # drop all practice trials
   group_by(Subject,Block) %>%
   mutate(
     Gender = recode(
@@ -237,6 +236,11 @@ df <- df_raw %>%
       grepl("Neg$",primeType) ~ "Neg",
       TRUE ~ "Base"
     ) %>% as.factor,
+    SRIValence = recode(
+      SRIValence,
+      "Pos" = "Helpful",
+      "Neg" = "Upsetting"
+    ),
     primeSource = gsub("^(noun|other|letter)(Pos|Neg|Str)$","\\1",primeType) %>% as.factor,
     otherValence2 = gsub("^(other)(Pos|Neg)(\\d)$","\\2",otherValence),
     Condition = case_when(
@@ -280,6 +284,36 @@ df <- df_raw %>%
     Exclusion = not(speedInclusion) & not(accInclusion) & nameExclusion,
     Inclusion = Correct & not(Exclusion),
     logRT = log(RT)
+  ) %>% 
+  left_join(
+      group_by(.,Subject,otherValence,SRIValence,otherValence2) %>%
+        summarise(AvgSRI = mean(valSRI)) %>%
+        spread(SRIValence,AvgSRI) %>%
+        mutate(
+          catSRI = case_when(
+            Helpful  > 1 & Upsetting == 1 ~ "supportive",
+            Helpful  > 1 & Upsetting  > 1 ~ "ambivalent",
+            Helpful == 1 & Upsetting  > 1 ~ "aversive",
+            Helpful == 1 & Upsetting == 1 ~ "indifferent",
+            TRUE ~ NA_character_
+          ),
+          #         The SRI was developed by Campo and colleagues (2009).
+          # They determined categories of network ties:
+          # * supportive  ->  >1 on helpful, =1 on upsetting
+          # * ambivalent  ->  >1 on helpful, >1 on upsetting
+          # * aversive    ->  =1 on helpful, >1 on upsetting
+          # * indifferent ->  =1 on helpful, =1 on upsetting
+          # 
+          # The authors further mention also using a cut-off at 3 rather than 1.
+          catSRI_ext = case_when(
+            Helpful >= 3 & Upsetting <  3 ~ "supportive",
+            Helpful >= 3 & Upsetting >= 3 ~ "ambivalent",
+            Helpful <  3 & Upsetting >= 3 ~ "aversive",
+            Helpful <  3 & Upsetting <  3 ~ "indifferent",
+            TRUE ~ NA_character_
+          )
+        ) %>% ungroup %>% select(Subject,otherValence,catSRI,catSRI_ext),
+      by=c("Subject","otherValence")
   ) %>%
   ungroup %>%
   arrange(Subject)
@@ -299,11 +333,11 @@ df_subj <- df %>% filter(Block == "experiment") %>%
 df_others <- df %>% filter(Block == "experiment") %>%
   select(
     Subject,Gender,otherValence,otherValence2,otherNames,otherRel,otherNum,otherDir,
-    valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers
+    valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers,catSRI,catSRI_ext
   ) %>% distinct %>% arrange(Subject)
 
 df_val <- df_others %>% filter(subjExclusion %>% not) %>%
-  distinct(Subject,otherValence,otherValence2,otherDir,valDir,SRIValence,otherSRI,valSRI)
+  distinct(Subject,otherValence,otherValence2,otherDir,valDir,SRIValence,otherSRI,valSRI,catSRI,catSRI_ext)
 
 df_time <- df %>% filter(Block == "experiment") %>%
   select(
@@ -321,7 +355,6 @@ df_trials <- df %>% filter(Block == "experiment") %>%
 df_base <- df_raw %>% select(c(practicePrimes,experimentPrimes))
 
 ```
-
 
 #######################
 # Demographics & More #
@@ -468,10 +501,7 @@ df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% filter(n > 
 
 ```
 
-
-
-
-Comments, by checking all the names, there are a few issues:
+By checking all the names, there are a few issues:
 
 Clearly not names:
 Derkleine, Derwächter, Niemanden
@@ -496,7 +526,7 @@ The participants who provided the three items that are clearly not names were ex
 #   summarize %>% ungroup %>% count("Relation_Type" = otherRel)
 
 df_others %>% distinct(Subject,otherRel) %>%
-  count(otherRel) %T>% View
+  count(otherRel) #%T>% View
 
 df_others %>%
   filter(otherRel %in% c("Schmarotzer","KrankerTeufel")) %>%
@@ -573,20 +603,60 @@ fitSRI
 
 summary(fitSRI) %$% coefficients %>% zapsmall
 
-emmeans(fitSRI,"SRIValence") %>% contrast(method="revpairwise")
-emmeans(fitSRI,"otherValence2") %>% contrast(method="revpairwise")
+# emmeans(fitSRI,"SRIValence") %>% contrast(method="revpairwise")
+# emmeans(fitSRI,"otherValence2") %>% contrast(method="revpairwise")
 emmeans(fitSRI, ~SRIValence * otherValence2) %>% contrast(method="revpairwise")
-compSRI <- emmeans(fitSRI, ~SRIValence * otherValence2) %>% as_tibble
 
 ```
 
 ```{r graphics, options}
-compSRI %>% 
+emmeans(fitSRI, ~SRIValence * otherValence2) %>% as_tibble %>% 
   ggplot(aes(x=SRIValence,y=emmean,fill = otherValence2)) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   guides(fill=guide_legend(reverse=TRUE)) +
-  labs(x="SRI Valence",y="Avg SRI [1-6]",fill="SO Valence") +
-  scale_y_continuous(limits = c(0,6))
+  labs(x="SRI Valence",y="Avg SRI",fill="SO Valence") +
+  coord_cartesian(ylim=c(1,6)) +
+  scale_y_continuous(breaks=seq(1,6,1))
+
+```
+
+
+```{r catSRI, options}
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>% 
+  group_by(otherValence2,catSRI) %>% tally %>% mutate(Perc = 100*n/sum(n))
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>% 
+  group_by(otherValence2,catSRI_ext) %>% tally %>% mutate(Perc = 100*n/sum(n))
+
+```
+
+Interestingly, our negative others are not strictly aversive, and our positive others are not strictly supportive.
+More concerning though, is that 5 negative others are rated supportive, indicating a minimum of 1 for upsetting.
+
+This might be an artefact of the SRI, which questions specifically helpfulness and upsettingness, and not other constructs of social relation.
+
+```{r special cats, options}
+
+df_others %>%
+  filter(
+    (otherValence2 == "Neg" & (catSRI == "supportive" | catSRI_ext == "supportive")) |
+      (otherValence2 == "Pos" & (catSRI == "aversive" | catSRI_ext == "aversive"))
+  ) %>%
+  distinct(Subject,otherValence,otherValence2,otherNames,otherRel,otherDir,valDir,catSRI,catSRI_ext) %>%
+  arrange(catSRI,otherValence,Subject,otherDir) #%>% View
+
+```
+
+The truly problematic cases are:
+Subj 34 -> provided for both otherNeg clearly Pos others [could be an error with encoding]
+Subj 58 -> provided for both otherNeg clearly Pos others
+
+```{r label, options}
+
+df_others %>% filter(Subject == 34 | Subject == 58) %>% 
+  distinct(Subject,otherValence2,otherNames,otherRel,otherDir,valDir,catSRI,catSRI_ext,FirstOthers) %>%
+  arrange(Subject,otherValence2,otherNames,otherDir) #%>% View
 
 ```
 
