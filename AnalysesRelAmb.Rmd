@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-08'
+Date: '2019-03-11'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -10,7 +10,7 @@ version: '1.1'
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list=ls())
+# rm(list=ls())
 ```
 
 ```{r libraries, include=FALSE}
@@ -271,18 +271,18 @@ df <- df_raw %>%
       Key == "Aneg" & targetType == "adjPos" & Answer == "L" ~ TRUE,
       TRUE ~ FALSE),
     Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
-    speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
-    accInclusion = (1 - mean(speedInclusion)) < 0.83,
-      # If we have to exclude more than 83% of the trials of a single participant,
-      #  then this participant will be excluded entirely.
-    nameExclusion = (Subject == 8 | Subject == 72),
-    # These two participants did not follow instructions, as they did not provide sufficient 
-    #  and actual names for SOs as they were instructed to do.
-    # Specifically, one participant provided us with 'Niemanden' (nobody in German),
-    #  the other participant provided weird nicknames, not proper names.
-    subjExclusion = not(accInclusion) | nameExclusion,
-    Exclusion = not(speedInclusion) & not(accInclusion) & nameExclusion,
-    Inclusion = Correct & not(Exclusion),
+    # speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
+    # accInclusion = (1 - mean(speedInclusion)) < 0.83,
+    #   # If we have to exclude more than 83% of the trials of a single participant,
+    #   #  then this participant will be excluded entirely.
+    # nameExclusion = (Subject == 8 | Subject == 72),
+    # # These two participants did not follow instructions, as they did not provide sufficient 
+    # #  and actual names for SOs as they were instructed to do.
+    # # Specifically, one participant provided us with 'Niemanden' (nobody in German),
+    # #  the other participant provided weird nicknames, not proper names.
+    # subjExclusion = not(accInclusion) | nameExclusion,
+    # Exclusion = not(speedInclusion) & not(accInclusion) & nameExclusion,
+    # Inclusion = Correct & not(Exclusion),
     logRT = log(RT)
   ) %>% 
   left_join(
@@ -320,14 +320,39 @@ df <- df_raw %>%
 
 ```
 
+These are all our exclusion variables, split from the main mutate block above, to keep a clear overview.
+
+```{r Exclusion Criteria, options}
+
+df %<>% mutate(
+  speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
+  accInclusion = (1 - mean(speedInclusion)) < 0.83,
+  # If we have to exclude more than 83% of the trials of a single participant,
+  #  then this participant will be excluded entirely.
+  nameExclusion = (Subject %in% c(8,72)),
+  # These participants did not follow instructions, as they did not provide sufficient 
+  #  and actual names for SOs as they were instructed to do.
+  # Specifically, one participant provided us with 'Niemanden' (nobody in German),
+  #  the other participant provided weird nicknames, not proper names.
+  valExclusion = (Subject %in% c(34,58)),
+  # These participants did not follow instructions, as they did not provide positive and negative SOs.
+  # They provided 4 positive participants (derived from their direct measures), instead of 2 positive and 2 negative.
+  instrExclusion = nameExclusion | valExclusion,
+  subjExclusion = not(accInclusion) | instrExclusion,
+  trialInclusion = speedInclusion & Correct,
+  Inclusion = trialInclusion & not(subjExclusion)
+  )
+
+```
+
 This part creates a few subdataframes, to keep overview and reduce the amount of replicated rows.
-[almost 83000 rows for the full dataset with only 2 participants, due to multiple "gatherings"]
+[over 666.000 observations in "df" due to multiple "gatherings"]
 
 ```{r Specific Dataframes, options}
 
 df_subj <- df %>% filter(Block == "experiment") %>%
   select(
-    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,accInclusion,Study,Key,FirstOthers
+    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,instrExclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
 df_others <- df %>% filter(Block == "experiment") %>%
@@ -337,7 +362,8 @@ df_others <- df %>% filter(Block == "experiment") %>%
   ) %>% distinct %>% arrange(Subject)
 
 df_val <- df_others %>% filter(subjExclusion %>% not) %>%
-  distinct(Subject,otherValence,otherValence2,otherDir,valDir,SRIValence,otherSRI,valSRI,catSRI,catSRI_ext)
+  distinct(Subject,otherValence,otherValence2,otherDir,valDir,
+           SRIValence,otherSRI,valSRI,catSRI,catSRI_ext,subjExclusion)
 
 df_time <- df %>% filter(Block == "experiment") %>%
   select(
@@ -349,7 +375,7 @@ df_trials <- df %>% filter(Block == "experiment") %>%
   select(
     Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,
     Condition,Condition2,Answer,Correct,speedInclusion,accInclusion,subjExclusion,
-    nameExclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+    nameExclusion,trialInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 
 df_base <- df_raw %>% select(c(practicePrimes,experimentPrimes))
@@ -549,8 +575,31 @@ df_val %>% group_by(otherValence,otherDir) %>%
 
 ```{r mixed model, options}
 
+# afex::set_effects_contrasts()
+# fitDirect <- df_val %>% 
+#   mixed(
+#     valDir ~ otherDir * otherValence2 + (1|otherValence) + (1|Subject),
+#     data=., method = "KR",
+#     check_contrasts = TRUE,
+#     expand_re=FALSE
+#   )
+# 
+# 
+# fitDirect
+# 
+# summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+# 
+# emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
+# emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
+# emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
+# compDirect <- emmeans(fitDirect,~otherDir*otherValence2) %>% as_tibble
+
+```
+
+```{r mixed model, options}
+
 afex::set_effects_contrasts()
-fitDirect <- df_val %>% 
+fitDirect2 <- df_val %>% filter(subjExclusion %>% not) %>%
   mixed(
     valDir ~ otherDir * otherValence2 + (1|otherValence) + (1|Subject),
     data=., method = "KR",
@@ -559,24 +608,38 @@ fitDirect <- df_val %>%
   )
 
 
-fitDirect
+fitDirect2
 
-summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+summary(fitDirect2) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
 
-emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
-emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
-emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
-compDirect <- emmeans(fitDirect,~otherDir*otherValence2) %>% as_tibble
+emmeans(fitDirect2,"otherDir") %>% contrast(method="revpairwise")
+emmeans(fitDirect2,"otherValence2") %>% contrast(method="revpairwise")
+emmeans(fitDirect2,~otherDir*otherValence2) %>% contrast(method="revpairwise")
+compDirect2 <- emmeans(fitDirect2,~otherDir*otherValence2) %>% as_tibble
 
 ```
 
 ```{r graphics, options}
-compDirect %>% 
+
+# compDirect %>% 
+#   ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
+#   geom_col(position=position_dodge2(reverse=TRUE)) +
+#   guides(fill=guide_legend(reverse=TRUE)) +
+#   labs(x="Direct Measure",y="Avg Score [0-100]",fill="SO Valence") +
+#   scale_y_continuous(limits = c(0,100)) +
+#   scale_x_discrete(limits = c("Pos","Neg","Amb"))
+
+```
+
+```{r graphics, options}
+
+compDirect2 %>% 
   ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   guides(fill=guide_legend(reverse=TRUE)) +
   labs(x="Direct Measure",y="Avg Score [0-100]",fill="SO Valence") +
-  scale_y_continuous(limits = c(0,100))
+  scale_y_continuous(limits = c(0,100)) +
+  scale_x_discrete(limits = c("Pos","Neg","Amb"))
 
 ```
 
@@ -660,6 +723,9 @@ df_others %>% filter(Subject == 34 | Subject == 58) %>%
 
 ```
 
+These subjects are entirely with issue, as they provide only overwhelmingly positive participants.
+As such, they did not follow instructions and will be excluded.
+
 ###########
 # Stimuli #
 ###########
@@ -726,7 +792,7 @@ df_trials %>% filter(Inclusion) %>% count(primeType,targetType,Subject) %>% coun
 
 
 
-```{r model with only random intercept for subject, cache=TRUE}
+```{r model with random intercepts for subject and target, cache=TRUE}
 # emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
 afex::set_effects_contrasts()
 fitAfex <- df_trials %>% filter(Inclusion) %>% {
@@ -797,30 +863,46 @@ plannedContr %>%
   group_by(cPrimeA,cPrimeB) %>%
   do(
     plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
-      geom_col(position="dodge") + ggtitle(paste0(.$cPrimeA,"-",.$cPrimeB)) +
+      geom_col(position=position_dodge2(reverse=TRUE)) + ggtitle(paste(.$cPrimeA,"-",.$cPrimeB)) +
       labs(x="",y="") +
       scale_x_discrete(labels=NULL,breaks=NULL) +
       scale_y_continuous(breaks=seq(-0.06,.12,.02) ,limits=c(-0.03,.13)) +
-      geom_label(aes(label=p.value %>% sprintf("%.4f",.)),position = position_dodge(width=.9))+
+      geom_label(
+        aes(
+          label=case_when(
+            p.value < .001 ~ paste0(sprintf("%.4f",p.value),'***'),
+            p.value < .01 ~ paste0(sprintf("%.4f",p.value),'**'),
+            p.value < .05 ~ paste0(sprintf("%.4f",p.value),'*'),
+            TRUE ~ paste0(sprintf("%.4f",p.value))
+          )
+        ),position = position_dodge2(width=.9,reverse=TRUE))+
+      # guides(fill=guide_legend(reverse=TRUE)) +
       theme(legend.position="none")
   ) %$% 
   plot_grid(
     plot_grid(plotlist=plots,align="hv"),
-    get_legend(ggplot(plannedContr,aes(x=cPrimeA,y=estimate,fill=cTargetA))+geom_col()),
+    get_legend(
+      ggplot(plannedContr,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
+        geom_col() +
+        guides(fill=guide_legend(title="Target",reverse=TRUE))
+      ),
     rel_widths = c(3,.5)
   )
+
 ```
 
 ```{r label, options}
 
 plannedMeans %>% as_tibble %>%
   ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
-  geom_col(position="dodge") +
-  coord_cartesian(ylim=c(6.45,6.7))
-
-
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  labs(x="Primes",y="Reaction Times in log(ms)") +
+  guides(fill=guide_legend(title="Target",reverse=TRUE)) +
+  coord_cartesian(ylim=c(6.45,6.70))
 
 ```
+
+
 
 ########################
 # Exploratory Analyses #
