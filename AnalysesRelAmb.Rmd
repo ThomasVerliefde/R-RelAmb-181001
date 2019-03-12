@@ -334,10 +334,10 @@ df %<>% mutate(
   #  and actual names for SOs as they were instructed to do.
   # Specifically, one participant provided us with 'Niemanden' (nobody in German),
   #  the other participant provided weird nicknames, not proper names.
-  valExclusion = (Subject %in% c(34,58)),
+  # valExclusion = (Subject %in% c(34,58)),
   # These participants did not follow instructions, as they did not provide positive and negative SOs.
   # They provided 4 positive participants (derived from their direct measures), instead of 2 positive and 2 negative.
-  instrExclusion = nameExclusion | valExclusion,
+  instrExclusion = nameExclusion, # | valExclusion,
   subjExclusion = not(accInclusion) | instrExclusion,
   trialInclusion = speedInclusion & Correct,
   Inclusion = trialInclusion & not(subjExclusion)
@@ -562,9 +562,9 @@ df_others %>%
 
 The two items clearly not relational descriptions ("Schmarotzer" and "KrankerTeufel", German swearwords) belong to the participant who also provided non-name items, and as such already is excluded.
 
-#########################
-## Differences Pos/Neg ##
-#########################
+#################################
+## Direct Measures Ambivalence ##
+#################################
 
 ```{r Direct Measures of Ambivalence, options}
 
@@ -575,31 +575,8 @@ df_val %>% group_by(otherValence,otherDir) %>%
 
 ```{r mixed model, options}
 
-# afex::set_effects_contrasts()
-# fitDirect <- df_val %>% 
-#   mixed(
-#     valDir ~ otherDir * otherValence2 + (1|otherValence) + (1|Subject),
-#     data=., method = "KR",
-#     check_contrasts = TRUE,
-#     expand_re=FALSE
-#   )
-# 
-# 
-# fitDirect
-# 
-# summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
-# 
-# emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
-# emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
-# emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
-# compDirect <- emmeans(fitDirect,~otherDir*otherValence2) %>% as_tibble
-
-```
-
-```{r mixed model, options}
-
 afex::set_effects_contrasts()
-fitDirect2 <- df_val %>% filter(subjExclusion %>% not) %>%
+fitDirect <- df_val %>% filter(subjExclusion %>% not) %>%
   mixed(
     valDir ~ otherDir * otherValence2 + (1|otherValence) + (1|Subject),
     data=., method = "KR",
@@ -608,32 +585,20 @@ fitDirect2 <- df_val %>% filter(subjExclusion %>% not) %>%
   )
 
 
-fitDirect2
+fitDirect
 
-summary(fitDirect2) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
+summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
 
-emmeans(fitDirect2,"otherDir") %>% contrast(method="revpairwise")
-emmeans(fitDirect2,"otherValence2") %>% contrast(method="revpairwise")
-emmeans(fitDirect2,~otherDir*otherValence2) %>% contrast(method="revpairwise")
-compDirect2 <- emmeans(fitDirect2,~otherDir*otherValence2) %>% as_tibble
-
-```
-
-```{r graphics, options}
-
-# compDirect %>% 
-#   ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
-#   geom_col(position=position_dodge2(reverse=TRUE)) +
-#   guides(fill=guide_legend(reverse=TRUE)) +
-#   labs(x="Direct Measure",y="Avg Score [0-100]",fill="SO Valence") +
-#   scale_y_continuous(limits = c(0,100)) +
-#   scale_x_discrete(limits = c("Pos","Neg","Amb"))
+emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
+emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
+emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
+compDirect <- emmeans(fitDirect,~otherDir*otherValence2) %>% as_tibble
 
 ```
 
 ```{r graphics, options}
 
-compDirect2 %>% 
+compDirect %>% 
   ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   guides(fill=guide_legend(reverse=TRUE)) +
@@ -706,7 +671,9 @@ df_others %>%
     (otherValence2 == "Neg" & (catSRI == "supportive" | catSRI_ext == "supportive")) |
       (otherValence2 == "Pos" & (catSRI == "aversive" | catSRI_ext == "aversive"))
   ) %>%
-  distinct(Subject,otherValence,otherValence2,otherNames,otherRel,otherDir,valDir,catSRI,catSRI_ext) %>%
+  distinct(
+    Subject,otherValence,otherValence2,otherNames,otherRel,otherDir,valDir,catSRI,catSRI_ext
+  ) %>%
   arrange(catSRI,otherValence,Subject,otherDir) #%>% View
 
 ```
@@ -723,8 +690,39 @@ df_others %>% filter(Subject == 34 | Subject == 58) %>%
 
 ```
 
-These subjects are entirely with issue, as they provide only overwhelmingly positive participants.
-As such, they did not follow instructions and will be excluded.
+These subjects provided only overwhelmingly positive participants.
+
+
+```{r Graph, options}
+
+df_val %>% spread(otherDir,valDir) %>%
+  ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Amb)) +
+  geom_point(alpha=.1,position=position_dodge2(width=0,reverse=TRUE)) +
+  labs(title="Grid of Direct Measures") +
+  guides(colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=5),reverse=TRUE))
+
+df_val %>%
+  ggplot(aes(x=otherDir,y=valDir,colour=otherValence2)) +
+  geom_point(position=position_dodge2(width = .75,reverse=TRUE),alpha=.1) +
+  labs(x = "Direct Measures", y = "Ratings", title="Direct Measures of SOs") +
+  guides(colour = guide_legend(title="Valence" ,override.aes = list(alpha=1,size=5),reverse=TRUE))
+
+
+```
+
+```{r label, options}
+
+df_val %>% spread(otherDir,valDir) %>% 
+  filter(otherValence2 == "Pos" & Neg >= 50 & Pos <= Neg) %>%
+  distinct(Subject,otherValence,catSRI,catSRI_ext,Amb,Neg,Pos) #%>% View
+
+df_val %>% spread(otherDir,valDir) %>%
+  filter(otherValence2 == "Neg" & Pos >= 50 & Neg <= Pos) %>%
+  distinct(Subject,otherValence,catSRI,catSRI_ext,Amb,Neg,Pos) #%>% View
+
+```
+
+
 
 ###########
 # Stimuli #
@@ -843,7 +841,7 @@ primeContr <- fitAfex %>% emmeans("primeType") %>%
 plannedContr
 
 fullContr %>%
-  filter(cPrimeA==cPrimeB) 
+  filter(cPrimeA==cPrimeB)
 
 fullContr %>%
   filter((cPrimeA == "otherPos" & cPrimeB == "nounNeg" & cTargetA == "adjNeg" & cTargetB == "adjNeg") | (
@@ -870,35 +868,58 @@ plannedContr %>%
       geom_label(
         aes(
           label=case_when(
-            p.value < .001 ~ paste0(sprintf("%.4f",p.value),'***'),
-            p.value < .01 ~ paste0(sprintf("%.4f",p.value),'**'),
-            p.value < .05 ~ paste0(sprintf("%.4f",p.value),'*'),
-            TRUE ~ paste0(sprintf("%.4f",p.value))
+            p.value < .001 ~ '***',
+            p.value < .01 ~ '**',
+            p.value < .05 ~ '*',
+            TRUE ~ NA_character_
           )
         ),position = position_dodge2(width=.9,reverse=TRUE))+
       # guides(fill=guide_legend(reverse=TRUE)) +
       theme(legend.position="none")
   ) %$% 
-  plot_grid(
-    plot_grid(plotlist=plots,align="hv"),
+  list(
+    plot_grid(
+      plotlist=plots,align="hv",nrow=2),
     get_legend(
       ggplot(plannedContr,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
         geom_col() +
         guides(fill=guide_legend(title="Target",reverse=TRUE))
-      ),
+      )
+    ) %>%
+  plot_grid(
+    plotlist = .,
     rel_widths = c(3,.5)
+  ) %>%
+  plot_grid(
+    ggdraw() + draw_label("Comparisons of Prime Conditions",fontface="bold"),
+    .,
+    ncol=1, rel_heights = c(0.1,1)
   )
 
 ```
 
 ```{r label, options}
 
-plannedMeans %>% as_tibble %>%
-  ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
-  geom_col(position=position_dodge2(reverse=TRUE)) +
-  labs(x="Primes",y="Reaction Times in log(ms)") +
+plannedMeans %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
+  ggplot() +
+  geom_col(aes(x=primeType,y=rt,fill=targetType),position=position_dodge2(reverse=TRUE)) +
+  labs(x="Primes",y="Reaction Times (ms)") +
   guides(fill=guide_legend(title="Target",reverse=TRUE)) +
-  coord_cartesian(ylim=c(6.45,6.70))
+  geom_label(data = fullContr %>% filter(cPrimeA==cPrimeB),
+             aes(
+               x=cPrimeA,
+               y=1,
+               label=case_when(
+                 p.value < .001 ~ '***',
+                 p.value < .01 ~ '**',
+                 p.value < .05 ~ '*',
+                 TRUE ~ NA_character_
+               )
+             )
+  )
+
+# coord_cartesian(ylim=c(6.45,6.70))
+  
 
 ```
 
@@ -907,3 +928,7 @@ plannedMeans %>% as_tibble %>%
 ########################
 # Exploratory Analyses #
 ########################
+
+```{r label, options}
+
+```
