@@ -363,7 +363,7 @@ df_others <- df %>% filter(Block == "experiment") %>%
 
 df_val <- df_others %>% filter(subjExclusion %>% not) %>%
   distinct(Subject,otherValence,otherValence2,otherDir,valDir,
-           SRIValence,otherSRI,valSRI,catSRI,catSRI_ext,subjExclusion)
+           SRIValence,otherSRI,valSRI,catSRI,catSRI_ext)
 
 df_time <- df %>% filter(Block == "experiment") %>%
   select(
@@ -697,16 +697,37 @@ These subjects provided only overwhelmingly positive participants.
 
 df_val %>% spread(otherDir,valDir) %>%
   ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Amb)) +
-  geom_point(alpha=.1,position=position_dodge2(width=0,reverse=TRUE)) +
-  labs(title="Grid of Direct Measures") +
-  guides(colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=5),reverse=TRUE))
+  geom_point(alpha=.15,position=position_dodge2(width=0,reverse=TRUE)) +
+  labs(title="Grid of Direct Measures",x="Positivity",y="Negativity") +
+  guides(
+    colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=5),reverse=TRUE),
+    size = guide_legend(title="Ambivalence")
+    )
 
 df_val %>%
   ggplot(aes(x=otherDir,y=valDir,colour=otherValence2)) +
-  geom_point(position=position_dodge2(width = .75,reverse=TRUE),alpha=.1) +
+  geom_point(alpha=.1,position=position_dodge2(width = .75,reverse=TRUE)) +
   labs(x = "Direct Measures", y = "Ratings", title="Direct Measures of SOs") +
   guides(colour = guide_legend(title="Valence" ,override.aes = list(alpha=1,size=5),reverse=TRUE))
 
+df_val %>% group_by(SRIValence,Subject,otherValence,otherValence2) %>%
+  summarize(valSRI = mean(valSRI)) %>%
+  spread(SRIValence,valSRI) %>%
+  ggplot(aes(x=Helpful,y=Upsetting,colour=otherValence2)) +
+  geom_jitter(alpha=.25,position=position_dodge2(width=0,reverse=TRUE))
+  
+df_val %>% spread(otherDir,valDir) %>%
+  ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Amb,shape=catSRI_ext)) +
+  geom_point(alpha=.15,position=position_dodge2(width=0,reverse=TRUE),stroke=1.5) +
+  labs(title="Grid of Direct Measures",x="Positivity",y="Negativity") +
+  scale_shape_manual(values=c(1,0,5,2)) +
+  guides(
+    colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=3),reverse=TRUE),
+    shape = guide_legend(
+      title="SRI category",
+      override.aes = list(alpha=1,size=3,stroke=1,fill="black")),
+    size = guide_legend(title="Ambivalence")
+  )
 
 ```
 
