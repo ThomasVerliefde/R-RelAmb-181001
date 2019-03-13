@@ -788,8 +788,6 @@ df_trials %>% filter(Inclusion) %>% count(primeType,targetType,Subject) %>% coun
 ```
 
 
-
-
 ```{r model with random intercepts for subject and target, cache=TRUE}
 # emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # Trying it here
 afex::set_effects_contrasts()
@@ -901,25 +899,52 @@ plannedContr %>%
 ```{r label, options}
 
 plannedMeans %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
-  ggplot() +
-  geom_col(aes(x=primeType,y=rt,fill=targetType),position=position_dodge2(reverse=TRUE)) +
+  ggplot(aes(x=primeType,y=rt,fill=targetType)) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
   labs(x="Primes",y="Reaction Times (ms)") +
   guides(fill=guide_legend(title="Target",reverse=TRUE)) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
   geom_label(data = fullContr %>% filter(cPrimeA==cPrimeB),
-             aes(
-               x=cPrimeA,
-               y=1,
-               label=case_when(
-                 p.value < .001 ~ '***',
-                 p.value < .01 ~ '**',
-                 p.value < .05 ~ '*',
-                 TRUE ~ NA_character_
-               )
-             )
+             aes(x=cPrimeA,y=1,label=case_when(
+               p.value < .001 ~ '***',
+               p.value < .01 ~ '**',
+               p.value < .05 ~ '*',
+               TRUE ~ NA_character_
+             )),
+             inherit.aes = FALSE)
+
+# ggplot_build(plot)$data -> shows info about plot
+
+```
+
+####################################
+## Interactions Pos-Neg Separated ##
+####################################
+
+```{r label, options}
+afex::set_effects_contrasts()
+fitIntOther <- df_trials %>%
+  filter(Inclusion & c(primeType %in% c('otherPos','otherNeg'))) %>%
+  mixed(
+    logRT ~ primeType * targetType + (1|Target) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=FALSE
   )
 
-# coord_cartesian(ylim=c(6.45,6.70))
-  
+afex::set_effects_contrasts()
+fitIntNoun <- df_trials %>%
+  filter(Inclusion & c(primeType %in% c('nounPos','nounNeg'))) %>%
+  mixed(
+    logRT ~ primeType * targetType + (1|Target) + (1|Subject),
+    data=., method = "KR",
+    check_contrasts = TRUE,
+    expand_re=FALSE
+  )
+
+fitIntOther
+
+fitIntNoun
 
 ```
 
