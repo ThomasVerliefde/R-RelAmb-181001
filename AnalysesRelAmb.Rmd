@@ -698,7 +698,9 @@ These subjects provided only overwhelmingly positive participants.
 df_val %>% spread(otherDir,valDir) %>%
   ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Amb)) +
   geom_point(alpha=.15,position=position_dodge2(width=0,reverse=TRUE)) +
-  labs(title="Grid of Direct Measures",x="Positivity",y="Negativity") +
+  labs(title="Direct Measures of Positivity, Negativity, & Ambivalence",
+    x="Positivity",y="Negativity"
+    ) +
   guides(
     colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=5),reverse=TRUE),
     size = guide_legend(title="Ambivalence")
@@ -714,7 +716,11 @@ df_val %>% group_by(SRIValence,Subject,otherValence,otherValence2) %>%
   summarize(valSRI = mean(valSRI)) %>%
   spread(SRIValence,valSRI) %>%
   ggplot(aes(x=Helpful,y=Upsetting,colour=otherValence2)) +
-  geom_jitter(alpha=.25,position=position_dodge2(width=0,reverse=TRUE))
+  geom_jitter(alpha=.3,size=3) +
+  labs(title="Social Relationship Index (SRI) Scores", x="Helpfulness",y="Upsettingness") +
+  scale_x_continuous(breaks=seq(1,6)) +
+  scale_y_continuous(breaks=seq(1,6)) +
+  guides(colour = guide_legend(title = "Valence", override.aes=list(alpha=1,size=5), reverse=TRUE))
   
 df_val %>% spread(otherDir,valDir) %>%
   ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Amb,shape=catSRI_ext)) +
