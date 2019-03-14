@@ -1012,7 +1012,21 @@ ambUni <- df_val %>% spread(otherDir,valDir) %>%
 afex::set_effects_contrasts()
 ambUniOther <- df_val %>% spread(otherDir,valDir) %>%
   mixed(
-    Amb ~ Pos * Neg + otherValence2 + (1|Subject),
+    Amb ~ Pos * Neg * otherValence2 + (1|Subject),
+    data=.
+  )
+
+afex::set_effects_contrasts()
+ambPosOther <- df_val %>% spread(otherDir,valDir) %>%
+  mixed(
+    Amb ~ Pos * otherValence2 + (1|Subject) + (1|Neg),
+    data=.
+  )
+
+afex::set_effects_contrasts()
+ambNegOther <- df_val %>% spread(otherDir,valDir) %>%
+  mixed(
+    Amb ~ Neg * otherValence2 + (1|Subject) + (1|Pos),
     data=.
   )
 
@@ -1029,6 +1043,11 @@ ambUni %>% summary %$% coefficients %>% as.data.frame %>%
 ambUniOther %>% emmeans(~otherValence2+Pos*Neg) %>% contrast
 
 ambUni %>% emmip(Pos~Neg, cov.reduce = range)
+
+
+ambPosOther %>% emmip(otherValence2~Pos,cov.reduce=range)
+
+ambNegOther %>% emmip(otherValence2~Neg,cov.reduce=range)
 
 ambUniOther %>% emmip(Pos~Neg|otherValence2, cov.reduce = range)
 
