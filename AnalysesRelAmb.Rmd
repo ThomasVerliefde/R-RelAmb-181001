@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-11'
+Date: '2019-03-14'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -375,7 +375,7 @@ df_trials <- df %>% filter(Block == "experiment") %>%
   select(
     Subject,Trial,RT,logRT,Prime,primeType,primeSource,primeValence,Target,targetType,
     Condition,Condition2,Answer,Correct,speedInclusion,accInclusion,subjExclusion,
-    nameExclusion,trialInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
+    nameExclusion,trialInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness,otherValence
   ) %>% distinct %>% arrange(Subject,Trial)
 
 df_base <- df_raw %>% select(c(practicePrimes,experimentPrimes))
@@ -485,6 +485,7 @@ df_time %>% filter(accInclusion & !subjExclusion) %>%
 #   spread(Func,Value) %>% select(Var,mean,sd,min,max)
 
 ```
+
 
 ######################
 # Significant Others #
@@ -977,10 +978,58 @@ fitIntNoun
 
 
 
-########################
-# Exploratory Analyses #
-########################
+#######################
+# Additional Analyses #
+#######################
+
+```{r mixed Ambivalence, options}
+
+afex::set_effects_contrasts()
+ambRT <- left_join(
+  df_trials %>% filter(subjExclusion %>% not & primeType %in% c('otherPos','otherNeg')),
+  df_val %>% spread(otherDir,valDir) %>% select(Subject,otherValence,otherValence2,Amb,Neg,Pos),
+  by=c("Subject","otherValence")
+) %>% distinct(Subject,Trial,logRT,otherValence,otherValence2,Target,targetType,Amb,Inclusion) %>%
+  filter(Inclusion) %>%
+  mixed(
+    logRT ~ Amb * otherValence2 + (1|Target) + (1|targetType) + (1|Subject),
+    data=.
+  )
+
+afex::set_effects_contrasts()
+ambOther <- df_val %>% spread(otherDir,valDir) %>%
+  mixed(
+    Amb ~ otherValence2 + (1|Subject),
+    data=.
+  )
+
+ambUni <- df_val %>% spread(otherDir,valDir) %>%
+  mixed(
+    Amb ~ Pos * Neg + (1|Subject) + (1|otherValence2),
+    data=.
+  )
+
+afex::set_effects_contrasts()
+ambUniOther <- df_val %>% spread(otherDir,valDir) %>%
+  mixed(
+    Amb ~ Pos * Neg + otherValence2 + (1|Subject),
+    data=.
+  )
+
+```
 
 ```{r label, options}
+
+ambOther %>% emmeans("otherValence2") %>% contrast(method="revpairwise")
+
+ambUni %>% summary %$% coefficients %>% as.data.frame %>%
+  rownames_to_column %>% as_tibble
+
+
+ambUniOther %>% emmeans(~otherValence2+Pos*Neg) %>% contrast
+
+ambUni %>% emmip(Pos~Neg, cov.reduce = range)
+
+ambUniOther %>% emmip(Pos~Neg|otherValence2, cov.reduce = range)
 
 ```
