@@ -1,12 +1,14 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-14'
+Date: '2019-03-18'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
 version: '1.1'
 ---
+
+TODO: Check all variables whether they are what they should be (factor, numeric, ...)
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -16,7 +18,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r libraries, include=FALSE}
 lapply(
   c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans",
-    "pbkrtest","purrr","magrittr","cowplot"),
+    "pbkrtest","purrr","magrittr","cowplot","nnet"),
   require,
   character.only = T
 )
@@ -1050,5 +1052,49 @@ ambPosOther %>% emmip(otherValence2~Pos,cov.reduce=range)
 ambNegOther %>% emmip(otherValence2~Neg,cov.reduce=range)
 
 ambUniOther %>% emmip(Pos~Neg|otherValence2, cov.reduce = range)
+
+```
+
+```{r SRI by Direct, options}
+
+# What about centering (of Amb, Neg, Pos) here? Especially as we forego Subject
+
+catSRIFit <- df_val %>% spread(otherDir,valDir) %>%
+  distinct(Subject,otherValence,otherValence2,Pos,Neg,Amb,catSRI,catSRI_ext) %>%
+  mutate(
+    catSRI=factor(catSRI,levels=c('supportive','indifferent','ambivalent','aversive'))
+    ) %>%
+  multinom(
+    catSRI ~ otherValence2 + Amb + Neg + Pos,
+    data=.,
+    contrasts = "contr.poly"
+  )
+
+catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
+  distinct(Subject,otherValence,otherValence2,Pos,Neg,Amb,catSRI,catSRI_ext) %>%
+  mutate(
+    catSRI_ext=factor(catSRI_ext,levels=c('supportive','indifferent','ambivalent','aversive'))
+    ) %>%
+  multinom(
+    catSRI_ext ~ otherValence2 + Amb + Neg + Pos,
+    data=.,
+    contrasts = "contr.poly"
+  )
+
+```
+
+```{r plot, options}
+
+df_val %>%
+  ggplot(aes(y=valDir,x=otherValence2)) +
+  geom_jitter(alpha=.3)+
+  facet_grid(otherDir ~ catSRI) +
+  theme_bw()
+
+df_val %>%
+  ggplot(aes(y=valDir,x=otherValence2)) +
+  geom_jitter(alpha=.3)+
+  facet_grid(otherDir ~ catSRI_ext) +
+  theme_bw()
 
 ```
