@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-18'
+Date: '2019-03-19'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -12,7 +12,8 @@ TODO: Check all variables whether they are what they should be (factor, numeric,
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-# rm(list=ls())
+rm(list=ls())
+load("20190319.RData")
 ```
 
 ```{r libraries, include=FALSE}
@@ -1055,6 +1056,22 @@ ambUniOther %>% emmip(Pos~Neg|otherValence2, cov.reduce = range)
 
 ```
 
+```{r plot, options}
+
+df_val %>%
+  ggplot(aes(y=valDir,x=otherValence2)) +
+  geom_jitter(alpha=.3)+
+  facet_grid(otherDir ~ catSRI) +
+  theme_bw()
+
+df_val %>%
+  ggplot(aes(y=valDir,x=otherValence2)) +
+  geom_jitter(alpha=.3)+
+  facet_grid(otherDir ~ catSRI_ext) +
+  theme_bw()
+
+```
+
 ```{r SRI by Direct, options}
 
 # What about centering (of Amb, Neg, Pos) here? Especially as we forego Subject
@@ -1083,18 +1100,11 @@ catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
 
 ```
 
-```{r plot, options}
+Goal: predict categories of SRI based on Amb, Neg, & Pos
+Then, use this model to fit new data.
 
-df_val %>%
-  ggplot(aes(y=valDir,x=otherValence2)) +
-  geom_jitter(alpha=.3)+
-  facet_grid(otherDir ~ catSRI) +
-  theme_bw()
+```{r predict, options}
 
-df_val %>%
-  ggplot(aes(y=valDir,x=otherValence2)) +
-  geom_jitter(alpha=.3)+
-  facet_grid(otherDir ~ catSRI_ext) +
-  theme_bw()
 
 ```
+
