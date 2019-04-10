@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-19'
+Date: '2019-03-20'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -9,6 +9,7 @@ version: '1.1'
 ---
 
 TODO: Check all variables whether they are what they should be (factor, numeric, ...)
+TODO: Additional analysis with control variables (keyfirst, otherfirst, gender, ...)
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -329,7 +330,7 @@ These are all our exclusion variables, split from the main mutate block above, t
 
 df %<>% mutate(
   speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
-  accInclusion = (1 - mean(speedInclusion)) < 0.83,
+  accInclusion = (1 - mean(speedInclusion & Correct)) < 0.83,
   # If we have to exclude more than 83% of the trials of a single participant,
   #  then this participant will be excluded entirely.
   nameExclusion = (Subject %in% c(8,72)),

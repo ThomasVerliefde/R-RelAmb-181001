@@ -41,3 +41,4 @@ BAWL-R.xls
 # Our own data, should not be publicly on github, will be available through osf.io
 Data_RelAmb.zip
 /BackupData/*
+.Rproj.user
