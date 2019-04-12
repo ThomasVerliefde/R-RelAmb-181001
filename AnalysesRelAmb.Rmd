@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-03-20'
+Date: '2019-04-12'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -974,13 +974,109 @@ fitIntNoun <- df_trials %>%
     expand_re=FALSE
   )
 
-fitIntOther
+fitIntOther %>% summary
 
-fitIntNoun
+fitIntNoun %>% summary
 
 ```
 
+```{r graphs, options}
 
+graphIntOthers <- fitIntOther %>% emmeans(~primeType:targetType) %>% as_tibble %>%
+  mutate_at(
+    .vars = vars(emmean,asymp.LCL,asymp.UCL),
+    .funs = exp
+  ) %>%
+  select(-c(SE,df)) %>%
+  mutate(
+    targetType = recode(
+      targetType,
+      "adjNeg" = "Negative",
+      "adjPos" = "Positive"
+    ),
+    primeType = recode(
+      primeType,
+      "otherNeg" = "Negative",
+      "otherPos" = "Positive"
+    ),
+    Condition = if_else(
+      primeType == targetType,
+      "Congruent",
+      "Incongruent"
+    )
+  ) %>%
+  ggplot(aes(x=primeType,y=emmean,fill=targetType,
+             colour=Condition,ymin=asymp.LCL,ymax=asymp.UCL,
+             size=ifelse(Condition=="Congruent",1,0))) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
+                colour="black") +
+  scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
+  scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
+  scale_size_identity() +
+  guides(fill=guide_legend(title="Target\nValence",reverse=TRUE),
+         colour=FALSE,size=FALSE) +
+  labs(x="Prime Valence",y="Reaction Time (ms)",title="Significant Other Primes")
+
+graphIntNoun <- fitIntNoun %>% emmeans(~primeType:targetType) %>% as_tibble %>%
+  mutate_at(
+    .vars = vars(emmean,asymp.LCL,asymp.UCL),
+    .funs = exp
+  ) %>%
+  select(-c(SE,df)) %>%
+  mutate(
+    targetType = recode(
+      targetType,
+      "adjNeg" = "Negative",
+      "adjPos" = "Positive"
+    ),
+    primeType = recode(
+      primeType,
+      "nounNeg" = "Negative",
+      "nounPos" = "Positive"
+    ),
+    Condition = if_else(
+      primeType == targetType,
+      "Congruent",
+      "Incongruent"
+    )
+  ) %>%
+  ggplot(aes(x=primeType,y=emmean,fill=targetType,colour=Condition,
+             ymin=asymp.LCL,ymax=asymp.UCL,
+             size=ifelse(Condition=="Congruent",1,0))) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
+                colour="black") +
+  scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
+  scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
+  scale_size_identity() +
+  guides(fill=guide_legend(title="Target\nValence",reverse=TRUE),
+         colour=FALSE,size=FALSE) +
+  labs(x="Prime Valence",y="Reaction Time (ms)",title="Univalent Noun Primes")
+
+plot_grid(
+  graphIntOthers +
+    guides(fill=FALSE) +
+    labs(title="",x="Significant Other Primes"),
+  NULL,
+  graphIntNoun +
+    guides(fill=FALSE) +
+    labs(title="",x="Univalent Noun Primes") +
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.y = element_blank()
+    ),
+  NULL,
+  get_legend(graphIntOthers),
+  nrow = 1,
+  rel_widths = c(1,-.1,.85,-.075,.25),
+  rel_heights = c(1,.2)
+  ) +
+  draw_label("Interaction Comparison",x=.5,y=.95,size=18)
+
+```
 
 #######################
 # Additional Analyses #
