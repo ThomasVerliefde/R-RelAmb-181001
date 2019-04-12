@@ -879,6 +879,15 @@ fullContr %>%
 
 primeContr
 
+fullContr %>%
+  filter(cTargetA == cTargetB) %>%
+  filter(
+    (cPrimeA == "otherNeg" & cPrimeB == "letterStr" & cTargetA == "adjPos") |
+      (cPrimeA == "otherNeg" & cPrimeB == "nounPos" & cTargetA == "adjPos") |
+      (cPrimeA == "otherPos" & cPrimeB == "letterStr" & cTargetA == "adjNeg") |
+      (cPrimeA == "otherPos" & cPrimeB == "nounNeg" & cTargetA == "adjNeg")
+  )
+
 ```
 
 ############
@@ -949,6 +958,29 @@ plannedMeans %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
 
 ```
 
+```{r label, options}
+
+plannedMeans %>% as_tibble %>%
+  mutate_at(
+    vars(emmean,asymp.LCL,asymp.UCL),
+    .funs=exp) %>%
+  mutate(
+    primeType = recode(
+      primeType,
+      letterStr = ,
+      nounNeg = ,
+    )
+  )
+  ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
+  geom_col(position=position_dodge2(reverse=TRUE)) +
+  labs(x="Primes",y="Reaction Times (ms)") +
+  guides(fill=guide_legend(title="Target",reverse=TRUE)) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
+  
+
+```
+
+
 ####################################
 ## Interactions Pos-Neg Separated ##
 ####################################
@@ -1010,7 +1042,7 @@ graphIntOthers <- fitIntOther %>% emmeans(~primeType:targetType) %>% as_tibble %
              size=ifelse(Condition=="Congruent",1,0))) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
-                colour="black") +
+                colour="black",size=.5) +
   scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
   scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
   scale_size_identity() +
@@ -1046,7 +1078,7 @@ graphIntNoun <- fitIntNoun %>% emmeans(~primeType:targetType) %>% as_tibble %>%
              size=ifelse(Condition=="Congruent",1,0))) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
-                colour="black") +
+                colour="black",size=.5) +
   scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
   scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
   scale_size_identity() +
