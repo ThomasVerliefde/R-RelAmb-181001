@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-04-12'
+Date: '2019-04-25'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -900,7 +900,8 @@ plannedContr %>%
   group_by(cPrimeA,cPrimeB) %>%
   do(
     plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
-      geom_col(position=position_dodge2(reverse=TRUE)) + ggtitle(paste(.$cPrimeA,"-",.$cPrimeB)) +
+      geom_col(position=position_dodge2(reverse=TRUE)) +
+      ggtitle(paste(.$cPrimeA,"-",.$cPrimeB)) +
       labs(x="",y="") +
       scale_x_discrete(labels=NULL,breaks=NULL) +
       scale_y_continuous(breaks=seq(-0.06,.12,.02) ,limits=c(-0.03,.13)) +
@@ -923,8 +924,8 @@ plannedContr %>%
       ggplot(plannedContr,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
         geom_col() +
         guides(fill=guide_legend(title="Target",reverse=TRUE))
-      )
-    ) %>%
+    )
+  ) %>%
   plot_grid(
     plotlist = .,
     rel_widths = c(3,.5)
@@ -965,18 +966,23 @@ plannedMeans %>% as_tibble %>%
     vars(emmean,asymp.LCL,asymp.UCL),
     .funs=exp) %>%
   mutate(
-    primeType = recode(
-      primeType,
-      letterStr = ,
-      nounNeg = ,
-    )
-  )
+    primeType = 
+      primeType %>%
+      recode_factor(
+        otherPos = "Positive\nAcquaintances",
+        otherNeg = "Negative\nAcquaintances",
+        nounPos = "Univalent\nPositive",
+        nounNeg = "Univalent\nNegative",
+        letterStr = "Neutral\nLetters"
+      )
+  ) %>%
   ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   labs(x="Primes",y="Reaction Times (ms)") +
   guides(fill=guide_legend(title="Target",reverse=TRUE)) +
   scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
-  
+  theme(plot.margin = unit(c(3,0.4,0.4,0.4), "cm")) +
+  geom_label(data=)
 
 ```
 
@@ -1021,15 +1027,15 @@ graphIntOthers <- fitIntOther %>% emmeans(~primeType:targetType) %>% as_tibble %
   ) %>%
   select(-c(SE,df)) %>%
   mutate(
-    targetType = recode(
+    targetType = recode_factor(
       targetType,
-      "adjNeg" = "Negative",
-      "adjPos" = "Positive"
+      "adjPos" = "Positive",
+      "adjNeg" = "Negative"
     ),
-    primeType = recode(
+    primeType = recode_factor(
       primeType,
-      "otherNeg" = "Negative",
-      "otherPos" = "Positive"
+      "otherPos" = "Positive",
+      "otherNeg" = "Negative"
     ),
     Condition = if_else(
       primeType == targetType,
@@ -1040,13 +1046,13 @@ graphIntOthers <- fitIntOther %>% emmeans(~primeType:targetType) %>% as_tibble %
   ggplot(aes(x=primeType,y=emmean,fill=targetType,
              colour=Condition,ymin=asymp.LCL,ymax=asymp.UCL,
              size=ifelse(Condition=="Congruent",1,0))) +
-  geom_col(position=position_dodge2(reverse=TRUE)) +
-  geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
+  geom_col(position=position_dodge2()) +
+  geom_errorbar(position=position_dodge2(padding=.8),
                 colour="black",size=.5) +
   scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
   scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
   scale_size_identity() +
-  guides(fill=guide_legend(title="Target\nValence",reverse=TRUE),
+  guides(fill=guide_legend(title="Target\nValence"),
          colour=FALSE,size=FALSE) +
   labs(x="Prime Valence",y="Reaction Time (ms)",title="Significant Other Primes")
 
@@ -1057,15 +1063,15 @@ graphIntNoun <- fitIntNoun %>% emmeans(~primeType:targetType) %>% as_tibble %>%
   ) %>%
   select(-c(SE,df)) %>%
   mutate(
-    targetType = recode(
+    targetType = recode_factor(
       targetType,
-      "adjNeg" = "Negative",
-      "adjPos" = "Positive"
+      "adjPos" = "Positive",
+      "adjNeg" = "Negative"
     ),
-    primeType = recode(
+    primeType = recode_factor(
       primeType,
-      "nounNeg" = "Negative",
-      "nounPos" = "Positive"
+      "nounPos" = "Positive",
+      "nounNeg" = "Negative"
     ),
     Condition = if_else(
       primeType == targetType,
@@ -1076,13 +1082,13 @@ graphIntNoun <- fitIntNoun %>% emmeans(~primeType:targetType) %>% as_tibble %>%
   ggplot(aes(x=primeType,y=emmean,fill=targetType,colour=Condition,
              ymin=asymp.LCL,ymax=asymp.UCL,
              size=ifelse(Condition=="Congruent",1,0))) +
-  geom_col(position=position_dodge2(reverse=TRUE)) +
-  geom_errorbar(position=position_dodge2(reverse=TRUE,padding=.8),
+  geom_col(position=position_dodge2()) +
+  geom_errorbar(position=position_dodge2(padding=.8),
                 colour="black",size=.5) +
   scale_colour_manual(values=c("black","white"),aesthetics = c("colour")) +
   scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
   scale_size_identity() +
-  guides(fill=guide_legend(title="Target\nValence",reverse=TRUE),
+  guides(fill=guide_legend(title="Target\nValence"),
          colour=FALSE,size=FALSE) +
   labs(x="Prime Valence",y="Reaction Time (ms)",title="Univalent Noun Primes")
 
@@ -1226,14 +1232,6 @@ catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
     data=.,
     contrasts = "contr.poly"
   )
-
-```
-
-Goal: predict categories of SRI based on Amb, Neg, & Pos
-Then, use this model to fit new data.
-
-```{r predict, options}
-
 
 ```
 
