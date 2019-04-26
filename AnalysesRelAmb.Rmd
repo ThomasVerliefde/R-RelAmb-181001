@@ -14,7 +14,8 @@ TODO: Additional analysis with control variables (keyfirst, otherfirst, gender, 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
-load("20190319.RData")
+load("20190426.RData")
+# write("20190426.RData")
 ```
 
 ```{r libraries, include=FALSE}
@@ -846,9 +847,7 @@ plannedContr <- fitAfex %>% emmeans(c("primeType","targetType")) %>%
   separate(contrastA,c("cPrimeA","cTargetA"),sep=",") %>%
   separate(contrastB,c("cPrimeB","cTargetB"),sep=",") %>%
   filter(
-    ((cPrimeB == "letterStr" & (cPrimeA == "otherNeg" | cPrimeA == "otherPos")) |
-    (cPrimeB == "nounNeg" & cPrimeA == "otherNeg") |
-    (cPrimeB == "nounPos" & cPrimeA == "otherPos")) & cTargetA == cTargetB
+    (cPrimeA == "otherNeg" | cPrimeA == "otherPos") & cTargetA == cTargetB
   ) %>% arrange(cPrimeB,cPrimeA,cTargetA)
 
 fullContr <- fitAfex %>% emmeans(c("primeType","targetType")) %>%
@@ -965,16 +964,18 @@ quickplot <- function(data){
   ggplot(data=data,
          aes(x=primeType,y=emmean,fill=targetType,
              ymin=asymp.LCL,ymax=asymp.UCL,
-             ifelse(Condition=="Congruent",1,0))
+             colour=Condition,size=ifelse(Condition=="Congruent",1,0))
          ) +
     geom_col(position=position_dodge2(reverse=TRUE)) +
     labs(x=NULL,y="Reaction Times (ms)") +
-    guides(fill=guide_legend(title="Target\nValence",reverse=TRUE)) +
+    guides(fill=guide_legend(title="Target\nValence",reverse=TRUE),
+           colour=FALSE,size=FALSE) +
     scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
     theme(plot.margin = unit(c(1.4,0.4,0.4,0.4), "cm")) +
     geom_errorbar(position=position_dodge2(padding=.8,reverse=TRUE),
                   colour="black",size=.5) +
-    lims(y=c(0,820)) +
+    scale_y_continuous(limits=c(0,820),expand=c(0,0,0.05,0)) +
+    scale_colour_manual(values=c("black","white")) +
     scale_size_identity()
 }
 
