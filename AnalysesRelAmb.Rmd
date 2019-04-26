@@ -15,7 +15,8 @@ TODO: Additional analysis with control variables (keyfirst, otherfirst, gender, 
 knitr::opts_chunk$set(echo = TRUE)
 rm(list=ls())
 load("20190426.RData")
-# write("20190426.RData")
+
+# save.image("20190426.RData")
 ```
 
 ```{r libraries, include=FALSE}
