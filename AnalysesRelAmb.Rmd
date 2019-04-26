@@ -961,6 +961,24 @@ plannedMeans %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
 
 ```{r label, options}
 
+quickplot <- function(data){
+  ggplot(data=data,
+         aes(x=primeType,y=emmean,fill=targetType,
+             ymin=asymp.LCL,ymax=asymp.UCL,
+             ifelse(Condition=="Congruent",1,0))
+         ) +
+    geom_col(position=position_dodge2(reverse=TRUE)) +
+    labs(x=NULL,y="Reaction Times (ms)") +
+    guides(fill=guide_legend(title="Target\nValence",reverse=TRUE)) +
+    scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
+    theme(plot.margin = unit(c(1.4,0.4,0.4,0.4), "cm")) +
+    geom_errorbar(position=position_dodge2(padding=.8,reverse=TRUE),
+                  colour="black",size=.5) +
+    lims(y=c(0,820)) +
+    scale_size_identity()
+}
+
+
 plannedMeans %>% as_tibble %>%
   mutate_at(
     vars(emmean,asymp.LCL,asymp.UCL),
@@ -969,20 +987,54 @@ plannedMeans %>% as_tibble %>%
     primeType = 
       primeType %>%
       recode_factor(
-        otherPos = "Positive\nAcquaintances",
-        otherNeg = "Negative\nAcquaintances",
+        otherPos = "Positive\nSign. Others",
+        otherNeg = "Negative\nSign. Others",
         nounPos = "Univalent\nPositive",
         nounNeg = "Univalent\nNegative",
         letterStr = "Neutral\nLetters"
+      ),
+    Condition = 
+      case_when(
+        grepl("Neg",primeType) & grepl("Neg",targetType) ~ "Congruent",
+        grepl("Pos",primeType) & grepl("Pos",targetType) ~ "Congruent",
+        TRUE ~ "Incongruent"
       )
   ) %>%
-  ggplot(aes(x=primeType,y=emmean,fill=targetType)) +
-  geom_col(position=position_dodge2(reverse=TRUE)) +
-  labs(x="Primes",y="Reaction Times (ms)") +
-  guides(fill=guide_legend(title="Target",reverse=TRUE)) +
-  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
-  theme(plot.margin = unit(c(3,0.4,0.4,0.4), "cm")) +
-  geom_label(data=)
+  {
+    plot_grid(
+      plot_grid(
+        quickplot(
+          filter(.,primeType %in% c("Positive\nSign. Others","Neutral\nLetters"))
+        ) + theme(legend.position="none"),
+        quickplot(
+          filter(.,primeType %in% c("Negative\nSign. Others","Neutral\nLetters"))
+        ) + theme(
+          legend.position="none",
+          axis.line.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank()
+        ),
+        quickplot(
+          filter(.,primeType %in% c("Positive\nSign. Others","Univalent\nNegative"))
+        ) + theme(legend.position="none"),
+        quickplot(
+          filter(.,primeType %in% c("Negative\nSign. Others","Univalent\nPositive"))
+        ) + theme(
+          legend.position="none",
+          axis.line.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_blank()
+        ),
+        rel_widths = c(1,.8),
+        rel_heights = c(1,1)
+      ),
+      get_legend(quickplot(.)),
+      rel_widths = c(1,.2)
+    )
+  }
+
 
 ```
 
