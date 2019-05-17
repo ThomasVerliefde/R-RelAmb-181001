@@ -16,6 +16,8 @@ load("20190515.RData")
 # save.image("20190515.RData")
 ```
 
+As usual, I should check which packages are actually used..
+
 ```{r libraries, include=FALSE}
 lapply(
   c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans",
@@ -29,23 +31,9 @@ lapply(
 # Importing & Cleaning Data #
 #############################
 
-Make sure the relevant datafiles (Data_RelAmb.zip and BAWL-R.xls) are in the working directory.
+Make sure the relevant datafile (Data_RelAmb.zip) is in the working directory.
 
-```{r BAWL-R.xls, options}
-
-# bawl <- "BAWL-R.xls" %>% read_excel %>%
-#   mutate(
-#     WORD_CLASS = recode(
-#       WORD_CLASS,
-#       "N" = "NOUN",
-#       "V" = "VERB",
-#       "A" = "ADJ"
-#     )
-#   )
-
-```
-
-```{r Data_RelAmb.zip, include=FALSE}
+```{r RAW Data_RelAmb.zip, include=FALSE}
 
 temp <- tempdir()
 df_raw <- "Data_RelAmb.zip" %>% {
@@ -60,21 +48,7 @@ rm(temp)
 
 ```
 
-
-```{r Single File Extract, include = FALSE}
-
-# temp <- tempdir()
-# df_test <- "Data_RelAmb.zip" %>% 
-#   unzip(.,files=unzip(.,list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1), exdir=temp) %>%
-#   read_csv
-# rm(temp)
-# 
-# df_test %>% glimpse
-# unzip("Data_RelAmb.zip",list=T) %>% filter(grepl("(.csv)$",.$Name)) %>% extract(1,1)
-
-```
-
-```{r Data_RelAmb.zip, include=FALSE}
+```{r TIME Data_RelAmb.zip, include=FALSE}
 
 temp <- tempdir()
 df_rawTime <- "Data_RelAmb.zip" %>% {
@@ -110,9 +84,10 @@ rm(temp)
 
 ```
 
-This part cleans the data up a lot, and puts it in an useable long format.
+The following part cleans the data, and puts it in a long format.
 
-A few variables are dropped, as they are not crucial for the current investigations.
+A few variables are dropped, as they are not of interest for the current investigations.
+The Primes/Trials variables are a list with all the primes and trials used
 The data for each trial (both practice and experiment) is put in long format.
 The data for each significant other is put in long format.
 The information about block(practice/experiment), trialnr, and descriptives (Answer,Prime, primeType, Target, targetType, RT).
@@ -125,10 +100,9 @@ Some variables are mutated:
   Condition shows congruent or incongruent trials (or base, for neutral stimuli)
   Correct indicates whether the target was correctly classified
   Inclusion sets whether or not the trial should be included
-    Note: we should still implement exclusion of low acc participants # tried implementing, not yet ready
   LogRT is a simple transformation of RT to it's natural logarithm.
 
-```{r cleaning & gathering, options}
+```{r wrangling, options}
 
 df <- df_raw %>% 
   select(
@@ -158,15 +132,10 @@ df <- df_raw %>%
     sep = "_",
     extra = "merge",
     fill = "right"
-  ) %>% # Currently, otherValence is weird, repeating over trials
+  ) %>% # Note, otherValence is repeated over trials
   mutate(
     Desc = Desc %>% replace_na("otherNames") # alternatively, we could use coalesce.
   ) %>%
-  # unite(
-  #   "Desc",
-  #   otherValence,
-  #   Desc
-  # ) %>%
   spread(
     key = Desc, value = otherOutput
   ) %>%
@@ -260,7 +229,7 @@ df <- df_raw %>%
       Key == "Aneg" & targetType == "adjNeg" & Answer == "A" ~ TRUE,
       Key == "Aneg" & targetType == "adjPos" & Answer == "L" ~ TRUE,
       TRUE ~ FALSE),
-    Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject
+    Accuracy = mean(Correct), # Because we grouped by subject, these means are computed by subject and block
     # speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
     # accInclusion = (1 - mean(speedInclusion)) < 0.83,
     #   # If we have to exclude more than 83% of the trials of a single participant,
@@ -307,7 +276,18 @@ df <- df_raw %>%
   ) %>%
   ungroup %>%
   spread(otherDir,valDir) %>%
-  mutate(Griff = ((Pos + Neg) / 2) - abs(Pos - Neg)) %>% # We could add a scaled Griffin Index, but with 0 still 0
+  mutate(
+    Griff = ((Pos + Neg) / 2) - abs(Pos - Neg),
+    catGriff = case_when(
+      Griff > 0 ~ "Ambivalent",
+      Griff < 0 ~ "Univalent",
+      TRUE ~ "Indifferent"
+      ),
+    catGriff_ext = case_when(
+      Griff > sd(Griff) ~ "Ambivalent",
+      Griff < -sd(Griff) ~ "Univalent",
+      TRUE ~ "Indifferent"
+      )) %>%
   rename(Felt = Amb) %>%
   gather("otherDir","valDir",Pos,Neg,Felt,Griff) %>%
   mutate(
@@ -332,26 +312,18 @@ df <- df_raw %>%
 
 ```
 
-
-```{r griffin, options}
-
-# griffinFormula <- function(Pos,Neg){
-#   return((Pos+Neg)/2-abs(Pos-Neg))
-# }
-
-```
-
 This part creates a few subdataframes, to keep overview and reduce the amount of replicated rows.
 [over 666.000 observations in "df" due to multiple "gatherings"]
 
-```{r Specific Dataframes, options}
+```{r sub-dataframes, options}
 
 df_subj <- df %>% filter(Block == "experiment") %>%
   select(
-    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,instrExclusion,Study,Key,FirstOthers
+    Subject,Age,Gender,Language,Handedness,Accuracy,subjExclusion,instrExclusion,accInclusion,Study,Key,FirstOthers
   ) %>% distinct %>% arrange(Subject)
 
 df_others <- df %>% filter(Block == "experiment") %>%
+  filter(subjExclusion %>% not) %>%
   select(
     Subject,Gender,otherValence,otherValence2,otherNames,otherRel,otherNum,otherDir,
     valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers,catSRI,catSRI_ext
@@ -361,11 +333,7 @@ df_val <- df_others %>% filter(subjExclusion %>% not) %>%
   distinct(Subject,otherValence,otherValence2,otherDir,valDir,
            SRIValence,otherSRI,valSRI,catSRI,catSRI_ext)
 
-df_time <- df %>% filter(Block == "experiment") %>%
-  select(
-    Subject,Gender,subjExclusion,accInclusion,Accuracy
-  ) %>% distinct %>% arrange(Subject) %>%
-  full_join(df_rawTime,by="Subject")
+df_dir <- df_val %>% distinct(Subject,otherValence,otherValence2,otherDir,valDir)
 
 df_trials <- df %>% filter(Block == "experiment") %>%
   select(
@@ -375,7 +343,13 @@ df_trials <- df %>% filter(Block == "experiment") %>%
   ) %>% distinct %>% arrange(Subject,Trial)
 # This should have 80*96=7680 observations!
 
-df_base <- df_raw %>% select(c(practicePrimes,experimentPrimes))
+df_time <- df %>% filter(Block == "experiment") %>%
+  select(
+    Subject,Gender,subjExclusion,accInclusion,Accuracy
+  ) %>% distinct %>% arrange(Subject) %>%
+  full_join(df_rawTime,by="Subject")
+
+df_base <- df_raw %>% select(practicePrimes,experimentPrimes,practiceTrials,experimentTrials)
 
 ```
 
@@ -431,13 +405,14 @@ df_subj %>% filter(accInclusion & !subjExclusion) %>% {
 
 ```{r Age & Accuracy, options}
 
+options(pillar.sigfig = 6)
 df_subj %>% filter(accInclusion & !subjExclusion) %>% 
   summarize_at(
     vars(Age,Accuracy),
     funs(mean,sd,min,max,median,.args = list(na.rm=T))
   ) %>% gather("Var","Value") %>%
   separate(Var,c("Var","Func"),sep="_") %>%
-  spread(Func,Value) %>% select(Var,mean,sd,min,max,median) %>% as.data.frame
+  spread(Func,Value) %>% select(Var,mean,sd,min,max,median)
 
 ```
 
@@ -448,7 +423,9 @@ df_subj %>% filter(accInclusion & !subjExclusion) %>% count(Key,FirstOthers) %>%
 
 ```
 
-```{r Specific Timings Experiment Duration, options}
+Note, durations are in minutes
+
+```{r Duration of Experiments, options}
 
 df_time %>% filter(accInclusion & !subjExclusion) %>%
   summarize_at(
@@ -457,7 +434,7 @@ df_time %>% filter(accInclusion & !subjExclusion) %>%
   ) %>% gather("Var","Value") %>%
   separate(Var,c("Var","Func"),sep="_") %>%
   spread(Func,Value) %>% select(Var,mean,sd,min,max) %>%
-  slice(c(4,5,2,3,1,6)) %>% as.data.frame
+  slice(c(4,5,2,3,1,6))
 
 ```
 
@@ -493,35 +470,28 @@ df_time %>% filter(accInclusion & !subjExclusion) %>%
 
 df_others %>% group_by(otherNames,Subject) %>%
   summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
-  summarize("n" = n(),"otherNum" = otherNum %>% mean(na.rm=T)) %>%
-  add_count(n) %>% arrange(nn %>% desc)
+  summarize("n" = n(),"meanOther" = otherNum %>% mean(na.rm=T)) %>%
+  arrange(n %>% desc)
 
-df_others %>% group_by(otherNames,Subject) %>% filter(!is.na(otherNum)) %>%
-  summarize(
-    "otherNum" = otherNum %>% mean(na.rm=T),
-    "otherMax" = otherNum %>% max()
-    ) %>% summarize_at(vars(otherNum,otherMax),funs(mean,max,.args=list(na.rm=T)))
-  summarize("n" = n(), "otherNum" = otherNum %>% mean(na.rm=T)) %>%
-  
+df_others %>% group_by(otherNames,Subject) %>%
+  summarize("otherNum" = otherNum %>% mean(na.rm=T)) %>%
+  summarize("n" = n(),"meanOther" = otherNum %>% mean(na.rm=T),"maxOther"=otherNum %>% max(na.rm=T)) %>%
+  group_by(n) %>%
+  summarize("nn" = n(),"meanOther" = mean(meanOther,na.rm=T),"maxOther"=maxOther %>% max(na.rm=T))
 
 ```
 
-```{r repeated names within participants, options}
+There were 27 included participants who provided 2 or more significant others with the same starting letter.
+None of these look like variations of the same name.
+
+```{r names with same starting letter within participants, options}
 
 df_others %>% distinct(otherNames,Subject) %>%
   group_by(Subject) %>%
-  filter(otherNames %>% substr(1,1) %>% {or(duplicated(.),duplicated(.,fromLast=T))}) # %T>% View
-
-```
-
-```{r Repeated Names between Participants, options}
-
-# The following code shows a list of all names used by our included participants
-#View(df_others %>% filter(subjExclusion) %>% distinct(otherNames) %>% arrange(otherNames))
-
-df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% count(n)
-
-df_others %>% distinct(otherNames,Subject) %>% count(otherNames) %>% filter(n > 1) %>% arrange(desc(n))
+  filter(otherNames %>% substr(1,1) %>% {or(duplicated(.),duplicated(.,fromLast=T))}) %>%
+  arrange(otherNames) %>%
+  mutate(id = n() %>% seq_len) %>%
+  spread(id,otherNames) # %T>% utils::View(.)
 
 ```
 
@@ -535,34 +505,30 @@ Schindler, Stepputtis, Waltraut, Kopp
 
 ```{r label, options}
 
-df_others %>%
+df %>%
   filter(otherNames %in% c("Derkleine","Derwächter","Niemanden","Schindler","Stepputtis","Waltraut","Kopp")) %>%
   distinct(Subject,otherNames,otherRel)
 
 ```
 
-The participants who provided the three items that are clearly not names were excluded.
+The participants who provided the three items that were clearly non-names were excluded.
 
 
 ```{r Relations, options}
 
-# df %>% group_by(otherRel,otherNames,Subject) %>%
-#   summarize %>% ungroup %>% count("Relation_Type" = otherRel)
-
 df_others %>% distinct(Subject,otherRel) %>%
-  count(otherRel) #%T>% View
-
-df_others %>%
-  filter(otherRel %in% c("Schmarotzer","KrankerTeufel")) %>%
-  distinct(Subject,otherNames,otherRel)
+  count(otherRel) %>% arrange(n%>%desc) # %T>% utils::View(.)
 
 ```
 
-The two items clearly not relational descriptions ("Schmarotzer" and "KrankerTeufel", German swearwords) belong to the participant who also provided non-name items, and as such already is excluded.
 
 #################################
 ## Direct Measures Ambivalence ##
 #################################
+
+#####################
+## Felt & Potential
+#####################
 
 ```{r Direct Measures of Ambivalence, options}
 
@@ -580,7 +546,6 @@ fitDirect <- df_val %>% filter(otherDir != "Griff") %>%
     valDir ~ otherDir * otherValence2 + (1|Subject),
     data=., method = "KR"
   )
-
 
 fitDirect
 
@@ -613,19 +578,28 @@ fullGriff %>% contrast(method="revpairwise")
 
 ```
 
-
 ```{r graphics, options}
 
-fullDirect %>% 
+fullDirect %>% as_tibble %>% 
   ggplot(aes(x=otherDir,y=emmean,fill = otherValence2)) +
   geom_col(position=position_dodge2(reverse=TRUE)) +
   guides(fill=guide_legend(reverse=TRUE)) +
-  labs(x="Direct Measure",y="Avg Score [0-100]",fill="SO Valence") +
+  labs(x="Direct Measure",y="Avg Rating",fill="Valence") +
   scale_y_continuous(limits = c(0,100)) +
-  scale_x_discrete(limits = c("Pos","Neg","Amb"))
+  scale_x_discrete(limits = c("Pos","Neg","Felt"))
+
+fullGriff %>% as_tibble %>%
+  ggplot(aes(x=otherDir,y=emmean,fill=otherValence2)) +
+  geom_col(position = position_dodge2(reverse=TRUE)) +
+  guides(fill=guide_legend(reverse = TRUE)) +
+  labs(x="Direct Measure",y="Avg Rating",fill="Valence") +
+  scale_y_continuous(limits = c(-50,100))
 
 ```
 
+########
+## SRI
+########
 
 ```{r SRI, options}
 
@@ -712,8 +686,6 @@ These subjects provided only overwhelmingly positive participants.
 
 
 ```{r Graph, options}
-
-df_dir <- df_val %>% distinct(Subject,otherValence,otherValence2,otherDir,valDir)
 
 df_dir %>% spread(otherDir,valDir) %>%
   ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Felt)) +
