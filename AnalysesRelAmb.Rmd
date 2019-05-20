@@ -1,11 +1,11 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-05-17'
+Date: '2019-05-20'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
-version: '1.2'
+version: '1.3'
 ---
 
 ```{r setup, include=FALSE}
@@ -326,12 +326,12 @@ df_others <- df %>% filter(Block == "experiment") %>%
   filter(subjExclusion %>% not) %>%
   select(
     Subject,Gender,otherValence,otherValence2,otherNames,otherRel,otherNum,otherDir,
-    valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers,catSRI,catSRI_ext
+    valDir,SRIValence,otherSRI,valSRI,subjExclusion,Study,Key,FirstOthers,catGriff,catGriff_ext,catSRI,catSRI_ext
   ) %>% distinct %>% arrange(Subject)
 
 df_val <- df_others %>% filter(subjExclusion %>% not) %>%
   distinct(Subject,otherValence,otherValence2,otherDir,valDir,
-           SRIValence,otherSRI,valSRI,catSRI,catSRI_ext)
+           SRIValence,otherSRI,valSRI,catGriff,catGriff_ext,catSRI,catSRI_ext)
 
 df_dir <- df_val %>% distinct(Subject,otherValence,otherValence2,otherDir,valDir)
 
@@ -441,7 +441,7 @@ df_time %>% filter(accInclusion & !subjExclusion) %>%
 ```{r legacy code, eval=FALSE, include=FALSE}
 
 # This code is only here because I am really proud of it, at least the sapply within select.
-# It is utterly outdated
+# It is utterly outdated.
 
 # df %>% mutate(pointTime = gsub("^(.*)$","time\\1",pointTime)) %>%
 #   distinct(Subject,pointTime,valTime,subjInclusion) %>%
@@ -514,10 +514,37 @@ df %>%
 The participants who provided the three items that were clearly non-names were excluded.
 
 
+This shows the answers given in response to the question "What is your relationship with this person?".
+Note however that this is not corrected for possible differentations in spelling
+
 ```{r Relations, options}
 
-df_others %>% distinct(Subject,otherRel) %>%
+df_others %>% distinct(Subject,otherValence,otherRel) %>%
   count(otherRel) %>% arrange(n%>%desc) # %T>% utils::View(.)
+
+```
+
+
+```{r Relations NA, options}
+
+df_others %>% distinct(Subject,otherValence,otherRel) %>% arrange(otherRel) %T>% utils::View(.)
+
+df_others %>% filter(Subject == 57) %>% distinct(otherValence,otherNames,otherRel)
+
+df_others %>% filter(otherRel %>% is.na) %>% distinct(Subject,otherValence,otherNames,otherRel)
+
+```
+
+One participant did not supply us with the relation towards their negative significant other.
+As this is not the information we need for our primary analyses, and otherwise, this participant will be included in our main analyses.
+
+
+Note that for 64 participants, the amount of other people with the same first name was not recorded for 1 random significant other.
+This was due to a coding mistake in the software, and not because of these participants.
+
+```{r Number of Others with Same Name, options}
+
+df_others %>% distinct(Subject,otherValence,otherNum) %>% count(otherNum)
 
 ```
 
@@ -551,9 +578,10 @@ fitDirect
 
 summary(fitDirect) %$% coefficients %>% zapsmall #Neat function that puts very small numbers to 0
 
-# emmeans(fitDirect,"otherDir") %>% contrast(method="revpairwise")
-# emmeans(fitDirect,"otherValence2") %>% contrast(method="revpairwise")
-# emmeans(fitDirect,~otherDir*otherValence2) %>% contrast(method="revpairwise")
+emmeans(fitDirect,"otherDir")
+emmeans(fitDirect,"otherValence2")
+emmeans(fitDirect,~otherDir*otherValence2)
+
 fullDirect <- emmeans(fitDirect,~otherDir*otherValence2)
 
 fullDirect %>% contrast(method="revpairwise")
@@ -571,10 +599,13 @@ fitGriff <- df_val %>% filter(otherDir %in% c("Felt","Griff")) %>%
 
 fitGriff %>% summary %$% coefficients %>% zapsmall
 
+emmeans(fitGriff,"otherDir")
+emmeans(fitGriff,"otherValence2")
+emmeans(fitGriff,~otherDir*otherValence2)
+
 fullGriff <- emmeans(fitGriff,~otherDir*otherValence2)
 
 fullGriff %>% contrast(method="revpairwise")
-
 
 ```
 
@@ -596,6 +627,10 @@ fullGriff %>% as_tibble %>%
   scale_y_continuous(limits = c(-50,100))
 
 ```
+
+
+
+
 
 ########
 ## SRI
@@ -641,6 +676,11 @@ emmeans(fitSRI, ~SRIValence * otherValence2) %>% as_tibble %>%
 ```
 
 
+############
+## Further
+############
+
+
 ```{r catSRI, options}
 
 df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>% 
@@ -652,9 +692,70 @@ df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>%
 ```
 
 Interestingly, our negative others are not strictly aversive, and our positive others are not strictly supportive.
-More concerning though, is that 5 negative others are rated supportive, indicating a minimum of 1 for upsetting.
+More concerning? though, is that 5 negative others are rated supportive, indicating a minimum of 1 for upsetting.
 
-This might be an artefact of the SRI, which questions specifically helpfulness and upsettingness, and not other constructs of social relation.
+This might be an artefact of the SRI, which questions specifically helpfulness and upsettingness, and not other constructs of the social relation or positivity and negativity.
+
+```{r catGriff, options}
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>%
+  group_by(otherValence2,catGriff) %>% tally %>% mutate(Perc = 100*n/sum(n))
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>%
+  group_by(otherValence2,catGriff_ext) %>% tally %>% mutate(Perc = 100*n/sum(n))
+
+```
+
+The interesting thing here is that our negative significant others seem to be more 
+
+
+```{r cats, options}
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>%
+  group_by(otherValence2,catGriff,catSRI) %>% tally %>% mutate(Perc = 100*n/sum(n))
+
+df_val %>% distinct(Subject,otherValence,.keep_all=TRUE) %>%
+    mutate(otherValence2 = otherValence2 %>%
+           recode(Pos = "Positive", Neg = "Negative")) %>%
+  group_by(otherValence2,catGriff,catSRI) %>% tally %>% mutate(Perc = 100*n/sum(n)) %>%
+  group_by(otherValence2) %$%
+  do(.,
+     plots = ggplot(data=.,aes(x=catGriff,y=Perc,fill=catSRI)) +
+       geom_col() +
+       labs(x = .$otherValence2,y="Percentage") +
+       scale_fill_manual(
+         values = c(
+         ambivalent = hcl(h = 15,l=65,c=100),
+         aversive = hcl(h = 105,l=65,c=100),
+         indifferent = hcl(h = 195,l=65,c=100),
+         supportive = hcl(h = 285,l=65,c=100)
+         )
+       )
+  ) %$%
+  plot_grid(
+    plots[[1]] +
+      theme(legend.position = "none"),
+    NULL,
+    plots[[2]] +
+      theme(
+        legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank()
+      ),
+    get_legend(plots[[1]]),
+    nrow=1,
+    rel_widths = c(1,-.1,1,.3)
+  )
+
+# gather(catGriff,catGriff_ext,catSRI,catSRI_ext), then group_by(newvariable), then do(), then plot_grid(nrow=2,ncol=2); only 1 legend though
+
+```
+
+
+
+
 
 ```{r special cats, options}
 
@@ -666,7 +767,7 @@ df_others %>%
   distinct(
     Subject,otherValence,otherValence2,otherNames,otherRel,otherDir,valDir,catSRI,catSRI_ext
   ) %>%
-  arrange(catSRI,otherValence,Subject,otherDir) #%>% View
+  arrange(catSRI,otherValence,Subject,otherDir) #%T>% utilss::View(.)
 
 ```
 
