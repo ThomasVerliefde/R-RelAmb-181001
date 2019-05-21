@@ -1,6 +1,6 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-05-20'
+Date: '2019-05-21'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
@@ -21,7 +21,7 @@ As usual, I should check which packages are actually used..
 ```{r libraries, include=FALSE}
 lapply(
   c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans",
-    "pbkrtest","purrr","magrittr","cowplot","nnet"),
+    "pbkrtest","purrr","magrittr","cowplot","parallel"),
   require,
   character.only = T
 )
@@ -287,9 +287,12 @@ df <- df_raw %>%
       Griff > sd(Griff) ~ "Ambivalent",
       Griff < -sd(Griff) ~ "Univalent",
       TRUE ~ "Indifferent"
-      )) %>%
+      ),
+    zGriff = scale(Griff),
+    zFelt = scale(Amb)
+    ) %>%
   rename(Felt = Amb) %>%
-  gather("otherDir","valDir",Pos,Neg,Felt,Griff) %>%
+  gather("otherDir","valDir",Pos,Neg,Felt,Griff,zGriff,zFelt) %>%
   mutate(
   speedInclusion = (RT >= 300 & RT <= 3000), # Trials with latencies < 300 and > 3000 were excluded
   accInclusion = (1 - mean(speedInclusion & Correct)) < 0.83,
@@ -342,6 +345,29 @@ df_trials <- df %>% filter(Block == "experiment") %>%
     nameExclusion,trialInclusion,Inclusion,Accuracy,Gender,Key,FirstOthers,Handedness
   ) %>% distinct %>% arrange(Subject,Trial)
 # This should have 80*96=7680 observations!
+
+df_RTDM <- df_others %>%
+  distinct(Subject,otherNames,catGriff,otherDir,valDir) %>%
+  spread(otherDir,valDir)  %>%
+  right_join(
+    df_trials,
+    by = c("otherNames" = "Prime","Subject")
+  ) %>%
+  mutate(
+    primeDirect = case_when( 
+      catGriff == "Ambivalent" ~ "otherAmb",
+      Pos > Neg ~ "otherPos",
+      Neg > Pos ~ "otherNeg",
+      TRUE ~ primeType %>% as.character
+      # The most unclear thing here, is what we do with 'indifferent' participants
+      # Currently, they get categorised as "univalent": otherPos or otherNeg, depending on the difference between the two direct measures Neg and Pos
+      # In the case that these are equal, they get categorised as what they used to be before.
+    ) %>% factor(levels = c("letterStr","otherAmb","otherPos","otherNeg","nounPos","nounNeg")),
+    targetType = recode(targetType,"adjNeg" = "Neg", "adjPos" = "Pos") %>% factor(levels = c("Pos","Neg")),
+    Subject = Subject %>% as.factor,
+    Target = Target %>% as.factor,
+    logRT = logRT %>% as.numeric()
+  )
 
 df_time <- df %>% filter(Block == "experiment") %>%
   select(
@@ -882,7 +908,7 @@ test <- df_val %>%
 
 
 ###########
-# Stimuli #
+# Stimuli 
 ###########
 
 The positive adjective targets were:
@@ -922,7 +948,7 @@ Not Leid Feind Streit Drohung Abschied Gefängnis Verbrechen
 ```
 
 #################
-# Main Analyses #
+# Main Analyses 
 #################
 
 ```{r Control, options}
@@ -937,13 +963,6 @@ df_trials %>% filter(Subject == 1) %>% count(targetType)
 df_trials %>% filter(Subject == 1) %>% count(primeType,targetType)
 
 ```
-
-```{r label, options}
-
-df_trials %>% filter(Inclusion) %>% count(primeType,targetType,Subject) %>% count(n)
-
-```
-
 
 ```{r model with random intercepts for subject and target, cache=TRUE}
 # emmeans::emm_options(pbkrtest.limit=8000,lmerTest.limit=8000) # This allows for df estimates, but makes it run way slower.
@@ -1010,7 +1029,7 @@ fullContr %>%
 ```
 
 ############
-## Graphs ##
+## Graphs 
 ############
 
 This needs a y-axis denominator (delta(log(RT)))
@@ -1292,58 +1311,175 @@ plot_grid(
 ```
 
 #######################
-# Additional Analyses #
+# Additional Analyses 
 #######################
 
-```{r mixed Ambivalence, options}
+#####################################
+## Reaction Times & Direct Measures
+#####################################
+
+
+```{r explore, options}
+
+df_RTDM %>%
+  count(primeDirect)
+
+```
+
+
+```{r mixed model, options}
+
+# Kathi:
+# correlationPB <- mixed(log ~ zgriffin * zfelt + (1|vpnr) + (1|prime) + (1|target), data = test2,
+#                        type = 2, method = 'PB', cl = MyCluster, args_test = list(nsim = 1000, cl = MyCluster))
+# with zgriffin <- round(scale(griffin, center = TRUE, scale = TRUE), 2) and zfelt similarly
+
+myCluster <- makeCluster(rep("localhost",detectCores()-1))
+afex::set_effects_contrasts()
+fitRTGriff <- df_RTDM %>% filter(Inclusion & primeSource == "other") %>%
+  mixed(
+    logRT ~ zGriff * zFelt + (1|Subject) + (1|Target) + (1|primeValence),
+    data = .,
+    method = "PB",
+    type = 2,
+    cl = myCluster,
+    args_test = list(nsim = 1000, cl = myCluster)
+  )
+stopCluster(myCluster)
 
 afex::set_effects_contrasts()
-ambRT <- left_join(
-  df_trials %>% filter(subjExclusion %>% not & primeType %in% c('otherPos','otherNeg')),
-  df_val %>% spread(otherDir,valDir) %>% select(Subject,otherValence,otherValence2,Amb,Neg,Pos),
-  by=c("Subject","otherValence")
-) %>% distinct(Subject,Trial,logRT,otherValence,otherValence2,Target,targetType,Amb,Inclusion) %>%
-  filter(Inclusion) %>%
+fitRTDM <- df_RTDM %>% filter(Inclusion) %>%
   mixed(
-    logRT ~ Amb * otherValence2 + (1|Target) + (1|targetType) + (1|Subject),
-    data=.
+    logRT ~ primeDirect * targetType + (1|Subject) + (1|Target),
+    data=.,
+    method="KR"
   )
 
-afex::set_effects_contrasts()
-ambOther <- df_val %>% spread(otherDir,valDir) %>%
-  mixed(
-    Amb ~ otherValence2 + (1|Subject),
-    data=.
+fitRTGriff %>% summary %>% coefficients %>% zapsmall
+
+fitRTDM %>% summary %>% coefficients %>% zapsmall
+
+emm_options(lmerTest.limit=7000)
+fullRTDM <- fitRTDM %>% emmeans(~ primeDirect * targetType)
+
+```
+
+```{r contrasts, options}
+
+contrRTDM <- fullRTDM %>% contrast(method="pairwise") %>% as_tibble %>%
+  separate(contrast,c("primeA","targetA","primeB","targetB"),sep="(,)|( - )")
+
+```
+
+```{r graph, options}
+
+contrRTDM %>% filter_at(vars(primeA,primeB),any_vars(equals(.,"otherAmb"))) %>%
+  filter(targetA == targetB & primeA != "letterStr") %>%
+  group_by(primeA,primeB) %>%
+  do(
+    plots = ggplot(.,aes(x=primeA,y=estimate,fill=targetA)) +
+      geom_col(position = position_dodge2()) +
+      labs(x="",y="",title=paste(.$primeA,"-",.$primeB)) +
+      scale_y_continuous(limits = c(-0.1,0.1)) +
+      geom_label(
+        aes(
+          label = case_when(
+            p.value < .001 ~ '***',
+            p.value < .01 ~ '**',
+            p.value < .05 ~ '*',
+            TRUE ~ NA_character_
+          )
+        ),
+        position = position_dodge2(width = .9)
+      ) 
+  ) %$%
+  plot_grid(
+    plot_grid(
+      plots[[1]] +
+        theme(legend.position="none"),
+      plots[[2]]+
+        theme(legend.position="none"),
+      plots[[3]]+
+        theme(legend.position="none"),
+      plots[[4]]+
+        theme(legend.position="none"),
+      nrow=2,
+      rel_widths = c(1,1,1,1)
+    ),
+    get_legend(plots[[1]]),
+    nrow=1,
+    rel_widths = c(1,.2)
   )
 
-ambUni <- df_val %>% spread(otherDir,valDir) %>%
-  mixed(
-    Amb ~ Pos * Neg + (1|Subject) + (1|otherValence2),
-    data=.
-  )
 
-afex::set_effects_contrasts()
-ambUniOther <- df_val %>% spread(otherDir,valDir) %>%
-  mixed(
-    Amb ~ Pos * Neg * otherValence2 + (1|Subject),
-    data=.
-  )
 
-afex::set_effects_contrasts()
-ambPosOther <- df_val %>% spread(otherDir,valDir) %>%
-  mixed(
-    Amb ~ Pos * otherValence2 + (1|Subject) + (1|Neg),
-    data=.
-  )
 
-afex::set_effects_contrasts()
-ambNegOther <- df_val %>% spread(otherDir,valDir) %>%
-  mixed(
-    Amb ~ Neg * otherValence2 + (1|Subject) + (1|Pos),
-    data=.
+    group_by(cPrimeA,cPrimeB) %>%
+  do(
+    plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
+      geom_col(position=position_dodge2(reverse=TRUE)) +
+      ggtitle(paste(.$cPrimeA,"-",.$cPrimeB)) +
+      labs(x="",y="") +
+      scale_x_discrete(labels=NULL,breaks=NULL) +
+      scale_y_continuous(limits=c(-0.15,.15)) +
+      geom_label(
+        aes(
+          label=case_when(
+            p.value < .001 ~ '***',
+            p.value < .01 ~ '**',
+            p.value < .05 ~ '*',
+            TRUE ~ NA_character_
+          )
+        ),position = position_dodge2(width=.9,reverse=TRUE))+
+      theme(legend.position="none")
+  ) %$% 
+  list(
+    plot_grid(
+      plotlist=plots,align="hv",nrow=2),
+    get_legend(
+      ggplot(specificContr,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
+        geom_col() +
+        guides(fill=guide_legend(title="Target",reverse=TRUE))
+    )
+  ) %>%
+  plot_grid(
+    plotlist = .,
+    rel_widths = c(1,.15),
+    scale = c(1,.8)
+  ) %>%
+  plot_grid(
+    ggdraw() + draw_label("Comparisons of Prime Conditions",fontface="bold"),
+    .,
+    ncol=1, rel_heights = c(0.1,1)
   )
 
 ```
+
+
+```{r more graphs, options}
+
+fullRTDM %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
+  ggplot(aes(x=primeDirect,y=rt,fill=targetType)) +
+  geom_col(position=position_dodge2()) +
+  labs(x="Primes",y="Reaction Times (ms)") +
+  guides(fill=guide_legend(title="Target\nValence")) +
+  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Positive','Negative')) +
+  geom_label(data = contrRTDM %>% filter(primeA==primeB),
+             aes(x=primeA,y=1,label=case_when(
+               p.value < .001 ~ '***',
+               p.value < .01 ~ '**',
+               p.value < .05 ~ '*',
+               TRUE ~ NA_character_
+             )),
+             inherit.aes = FALSE)
+
+```
+
+##################
+## Something Else ...
+##################
+
+
 
 ```{r label, options}
 
@@ -1386,12 +1522,14 @@ df_val %>%
 
 # What about centering (of Amb, Neg, Pos) here? Especially as we forego Subject
 
+# Is there a good reason to use nnet::multinom() here?
+
 catSRIFit <- df_val %>% spread(otherDir,valDir) %>%
   distinct(Subject,otherValence,otherValence2,Pos,Neg,Amb,catSRI,catSRI_ext) %>%
   mutate(
     catSRI=factor(catSRI,levels=c('supportive','indifferent','ambivalent','aversive'))
     ) %>%
-  multinom(
+  nnet::multinom(
     catSRI ~ otherValence2 + Amb + Neg + Pos,
     data=.,
     contrasts = "contr.poly"
@@ -1402,7 +1540,7 @@ catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
   mutate(
     catSRI_ext=factor(catSRI_ext,levels=c('supportive','indifferent','ambivalent','aversive'))
     ) %>%
-  multinom(
+  nnet::multinom(
     catSRI_ext ~ otherValence2 + Amb + Neg + Pos,
     data=.,
     contrasts = "contr.poly"
