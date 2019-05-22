@@ -1314,9 +1314,9 @@ plot_grid(
 # Additional Analyses 
 #######################
 
-#####################################
-## Reaction Times & Direct Measures
-#####################################
+############
+## RT & DM
+############
 
 
 ```{r explore, options}
@@ -1362,25 +1362,25 @@ fitRTDM %>% summary %>% coefficients %>% zapsmall
 emm_options(lmerTest.limit=7000)
 fullRTDM <- fitRTDM %>% emmeans(~ primeDirect * targetType)
 
-```
-
-```{r contrasts, options}
-
 contrRTDM <- fullRTDM %>% contrast(method="pairwise") %>% as_tibble %>%
   separate(contrast,c("primeA","targetA","primeB","targetB"),sep="(,)|( - )")
 
 ```
 
-```{r graph, options}
+This should still receive a title
 
-contrRTDM %>% filter_at(vars(primeA,primeB),any_vars(equals(.,"otherAmb"))) %>%
-  filter(targetA == targetB & primeA != "letterStr") %>%
+```{r ambivalent comparison, options}
+
+contrRTDM %>%
+  filter(primeA == "otherAmb" | primeB == "otherAmb") %>%
+  filter(targetA == targetB) %>%
   group_by(primeA,primeB) %>%
   do(
     plots = ggplot(.,aes(x=primeA,y=estimate,fill=targetA)) +
       geom_col(position = position_dodge2()) +
-      labs(x="",y="",title=paste(.$primeA,"-",.$primeB)) +
+      labs(x=NULL,y=expression(Delta),title=paste(.$primeA,"-",.$primeB))  +
       scale_y_continuous(limits = c(-0.1,0.1)) +
+      scale_fill_discrete(labels = c("Positive","Negative")) +
       geom_label(
         aes(
           label = case_when(
@@ -1388,82 +1388,55 @@ contrRTDM %>% filter_at(vars(primeA,primeB),any_vars(equals(.,"otherAmb"))) %>%
             p.value < .01 ~ '**',
             p.value < .05 ~ '*',
             TRUE ~ NA_character_
-          )
+          ),
+          y = 0
         ),
-        position = position_dodge2(width = .9)
-      ) 
+        position = position_dodge2(width = .9),
+        show.legend = FALSE
+      ) +
+      guides(fill=guide_legend(title="Target\nValence")) +
+      theme(
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.spacing = margin(.5,1.5,.5,0,unit="cm"),
+        plot.margin = margin(.75,0,.75,0,unit="cm"),
+        axis.title.y = element_text(vjust = 1,angle=0),
+        title = element_text(hjust=.8)
+      )
   ) %$%
   plot_grid(
+    plots[[1]] + theme(legend.position="none",aspect.ratio = 1,panel.spacing = margin(0,0,0,0,unit="cm"),plot.margin=margin(0,.5,0,0,unit="cm")),
     plot_grid(
-      plots[[1]] +
+      plots[[2]] +
         theme(legend.position="none"),
-      plots[[2]]+
+      plots[[3]] +
         theme(legend.position="none"),
-      plots[[3]]+
+      plots[[4]] +
         theme(legend.position="none"),
-      plots[[4]]+
+      plots[[5]] +
         theme(legend.position="none"),
       nrow=2,
       rel_widths = c(1,1,1,1)
     ),
-    get_legend(plots[[1]]),
+    get_legend(plots[[1]] + theme(legend.margin=margin(0,0,1.5,.5,unit="cm"))),
     nrow=1,
-    rel_widths = c(1,.2)
-  )
-
-
-
-
-    group_by(cPrimeA,cPrimeB) %>%
-  do(
-    plots = ggplot(.,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
-      geom_col(position=position_dodge2(reverse=TRUE)) +
-      ggtitle(paste(.$cPrimeA,"-",.$cPrimeB)) +
-      labs(x="",y="") +
-      scale_x_discrete(labels=NULL,breaks=NULL) +
-      scale_y_continuous(limits=c(-0.15,.15)) +
-      geom_label(
-        aes(
-          label=case_when(
-            p.value < .001 ~ '***',
-            p.value < .01 ~ '**',
-            p.value < .05 ~ '*',
-            TRUE ~ NA_character_
-          )
-        ),position = position_dodge2(width=.9,reverse=TRUE))+
-      theme(legend.position="none")
-  ) %$% 
-  list(
-    plot_grid(
-      plotlist=plots,align="hv",nrow=2),
-    get_legend(
-      ggplot(specificContr,aes(x=cPrimeA,y=estimate,fill=cTargetA)) +
-        geom_col() +
-        guides(fill=guide_legend(title="Target",reverse=TRUE))
-    )
-  ) %>%
-  plot_grid(
-    plotlist = .,
-    rel_widths = c(1,.15),
-    scale = c(1,.8)
-  ) %>%
-  plot_grid(
-    ggdraw() + draw_label("Comparisons of Prime Conditions",fontface="bold"),
-    .,
-    ncol=1, rel_heights = c(0.1,1)
+    rel_widths = c(.5,1,.25)
   )
 
 ```
 
 
-```{r more graphs, options}
+```{r RT by Primes, options}
 
-fullRTDM %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
+fullRTDM %>%
+  as_tibble %>%
+  mutate(rt = emmean %>% exp) %>%
   ggplot(aes(x=primeDirect,y=rt,fill=targetType)) +
   geom_col(position=position_dodge2()) +
   labs(x="Primes",y="Reaction Times (ms)") +
   guides(fill=guide_legend(title="Target\nValence")) +
-  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Positive','Negative')) +
+  scale_fill_manual(values=c('#F8766D','#00BFC4'),labels=c('Positive','Negative')) +
   geom_label(data = contrRTDM %>% filter(primeA==primeB),
              aes(x=primeA,y=1,label=case_when(
                p.value < .001 ~ '***',
@@ -1474,6 +1447,62 @@ fullRTDM %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
              inherit.aes = FALSE)
 
 ```
+
+```{r Unival Comp, options}
+
+contrRTDM %>%
+  filter(primeA != "otherAmb" & primeB != "otherAmb") %>%
+  filter(targetA == targetB) %>%
+  filter(xor(grepl("other",primeA),grepl("other",primeB))) %>%
+  group_by(primeA,primeB) %>%
+  do(
+    plots = ggplot(.,aes(x=primeA,y=estimate,fill=targetA)) +
+      geom_col(position = position_dodge2()) +
+      labs(x=NULL,y=expression(Delta),title=paste(.$primeA,"-",.$primeB))  +
+      scale_y_continuous(limits = c(-0.16,0.16)) +
+      scale_fill_discrete(labels = c("Positive","Negative")) +
+      geom_label(
+        aes(
+          label = case_when(
+            p.value < .001 ~ '***',
+            p.value < .01 ~ '**',
+            p.value < .05 ~ '*',
+            TRUE ~ NA_character_
+          ),
+          y = 0
+        ),
+        position = position_dodge2(width = .9),
+        show.legend = FALSE
+      ) +
+      guides(fill=guide_legend(title="Target\nValence")) +
+      theme(
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.spacing = margin(.5,1.5,.5,0,unit="cm"),
+        plot.margin = margin(.75,0,.75,0,unit="cm"),
+        axis.title.y = element_text(vjust = 1,angle=0),
+        title = element_text(hjust=.8)
+      )
+  ) %$%
+  plot_grid(
+    plot_grid(
+      plots[[1]] + theme(legend.position="none"),
+      plots[[3]] + theme(legend.position="none"),
+      plots[[4]] + theme(legend.position="none"),
+      plots[[2]] + theme(legend.position="none"),
+      plots[[5]] + theme(legend.position="none"),
+      plots[[6]] + theme(legend.position="none"),
+      nrow=2
+      ),
+    get_legend(plots[[1]] + theme(legend.margin=margin(0,0,1.5,.5,unit="cm"))),
+    nrow=1,
+    rel_widths = c(1,.25)
+  )
+
+```
+
+
 
 ##################
 ## Something Else ...
