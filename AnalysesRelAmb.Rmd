@@ -1372,8 +1372,12 @@ This should still receive a title
 ```{r ambivalent comparison, options}
 
 contrRTDM %>%
+  mutate(
+    targetA = targetA %>% factor(levels = c("Pos","Neg")),
+    targetB = targetB %>% factor(levels=c("Pos","Neg"))
+  ) %>%
   filter(primeA == "otherAmb" | primeB == "otherAmb") %>%
-  filter(targetA == targetB) %>%
+  filter(targetA == targetB) %>% 
   group_by(primeA,primeB) %>%
   do(
     plots = ggplot(.,aes(x=primeA,y=estimate,fill=targetA)) +
@@ -1431,12 +1435,15 @@ contrRTDM %>%
 
 fullRTDM %>%
   as_tibble %>%
-  mutate(rt = emmean %>% exp) %>%
+  mutate(
+    rt = emmean %>% exp,
+    targetType = targetType %>% factor(levels = c("Pos","Neg"))
+         ) %>%
   ggplot(aes(x=primeDirect,y=rt,fill=targetType)) +
   geom_col(position=position_dodge2()) +
   labs(x="Primes",y="Reaction Times (ms)") +
   guides(fill=guide_legend(title="Target\nValence")) +
-  scale_fill_manual(values=c('#F8766D','#00BFC4'),labels=c('Positive','Negative')) +
+  scale_fill_discrete(labels=c('Positive','Negative')) +
   geom_label(data = contrRTDM %>% filter(primeA==primeB),
              aes(x=primeA,y=1,label=case_when(
                p.value < .001 ~ '***',
@@ -1451,6 +1458,10 @@ fullRTDM %>%
 ```{r Unival Comp, options}
 
 contrRTDM %>%
+  mutate(
+    targetA = targetA %>% factor(levels = c("Pos","Neg")),
+    targetB = targetB %>% factor(levels=c("Pos","Neg"))
+  ) %>%
   filter(primeA != "otherAmb" & primeB != "otherAmb") %>%
   filter(targetA == targetB) %>%
   filter(xor(grepl("other",primeA),grepl("other",primeB))) %>%
