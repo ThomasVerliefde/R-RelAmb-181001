@@ -1,11 +1,11 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-05-21'
+Date: '2019-06-05'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
-version: '1.3'
+version: '1.32'
 ---
 
 ```{r setup, include=FALSE}
@@ -26,6 +26,140 @@ lapply(
   character.only = T
 )
 ```
+
+There exists a package to easily create comparison brackets for ggplot, but I cannot manage to install it.
+As such, I have copied the relevant function here for my use.
+The original directory, and relevant information
+
+```{r ggBrackets, options}
+
+gg_bracket_between <- function(data, sample_col, sample1, sample2, mean_col, group_col = NA,
+                               group1 = NA, group2 = NA, dodge.width = 0.9, extra_y_space = 0,
+                               ...)
+{
+    if(!is.na(group_col))
+    {
+        n <- length(levels(data[,group_col]))
+        dex1 <- match(group1, levels(data[,group_col]))
+        dex_sample1 <- match(sample1, levels(data[,sample_col]))
+        x_dodge_start <- (((dodge.width - dodge.width*n) / (2*n)) + ((dex1 - 1) * (dodge.width / n))) + dex_sample1
+        dex2 <- match(group2, levels(data[,group_col]))
+        dex_sample2 <- match(sample2, levels(data[,sample_col]))
+        x_dodge_end <- (((dodge.width - dodge.width*n) / (2*n)) + ((dex2 - 1) * (dodge.width / n))) + dex_sample2
+
+        m1 <- data[data[,sample_col] == sample1 & data[,group_col] == group1, mean_col]
+        m2 <- data[data[,sample_col] == sample2 & data[,group_col] == group2, mean_col]
+
+        ymax <- max(c(m1, m2))
+
+    } else
+    {
+        x_dodge_start <- match(sample1, levels(data[,sample_col]))
+        x_dodge_end <- match(sample2, levels(data[,sample_col]))
+
+        m1 <- data[data[,sample_col] == sample1, mean_col]
+        m2 <- data[data[,sample_col] == sample2, mean_col]
+
+        ymax <- max(c(m1, m2))
+
+    }
+    max_h <- 0
+    for(i in data[,mean_col])
+    {
+        if(i > max_h)
+        {
+            max_h <- i
+        }
+    }
+    y_space <- 0.05 * max_h
+    a <- annotate("segment",
+                  x=c(x_dodge_start, x_dodge_start, x_dodge_end),
+                  xend=c(x_dodge_start, x_dodge_end, x_dodge_end),
+                  y= c((ymax*1.15) + extra_y_space, (ymax*1.15) + y_space + extra_y_space, (ymax*1.15) + y_space + extra_y_space),
+                  yend=c((ymax*1.15) + y_space + extra_y_space, (ymax*1.15) + y_space + extra_y_space,(ymax*1.15) + extra_y_space),
+                  ...)
+    return(a)
+}
+
+gg_value_between <- function(data, value, sample_col, sample1, sample2, mean_col, group_col = NA,
+                             group1 = NA, group2 = NA, dodge.width = 0.9, extra_y_space = 0, ...)
+{
+    if(!is.na(group_col))
+    {
+
+        n <- length(levels(data[,group_col]))
+        dex1 <- match(group1, levels(data[,group_col]))
+        dex_sample1 <- match(sample1, levels(data[,sample_col]))
+        x_dodge_start <- (((dodge.width - dodge.width*n) / (2*n)) + ((dex1 - 1) * (dodge.width / n))) + dex_sample1
+        dex2 <- match(group2, levels(data[,group_col]))
+        dex_sample2 <- match(sample2, levels(data[,sample_col]))
+        x_dodge_end <- (((dodge.width - dodge.width*n) / (2*n)) + ((dex2 - 1) * (dodge.width / n))) + dex_sample2
+
+        m1 <- data[data[,sample_col] == sample1 & data[,group_col] == group1, mean_col]
+        m2 <- data[data[,sample_col] == sample2 & data[,group_col] == group2, mean_col]
+
+        ymax <- max(c(m1, m2))
+
+    } else
+    {
+        x_dodge_start <- match(sample1, levels(data[,sample_col]))
+        x_dodge_end <- match(sample2, levels(data[,sample_col]))
+
+        m1 <- data[data[,sample_col] == sample1, mean_col]
+        m2 <- data[data[,sample_col] == sample2, mean_col]
+
+        ymax <- max(c(m1, m2))
+    }
+
+    max_h <- 0
+    for(i in data[,mean_col])
+    {
+        if(i > max_h)
+        {
+            max_h <- i
+        }
+    }
+    y_space <- 0.10 * max_h
+
+    b <- annotate("text", x = mean(c(x_dodge_end, x_dodge_start)), y = (ymax*1.15) + y_space + extra_y_space,
+                  label = value, ...)
+    return(b)
+}
+
+```
+
+
+## gg_value_between()
+ggplot2 layer to display user specified text between two samples in a bargraph.  Used in conjunction with gg_bracket_between().
+@param data The dataframe used in the plot
+@param value The text to be displayed
+@param sample_col Column name of the samples in data
+@param sample1 The first sample to be compared
+@param sample2 The second sample to be compared
+@param mean_col Column name of the means of the observations. Usually the y-axis of the bargraph.
+@param group_col Optional -- Column name of the sample groups if applicable.  Leave NA if there are no groups.
+@param group1 Optional -- The group to which the first sample belongs.  Leave NA if there are no groups.
+@param group2 Optional -- The group to which the second sample belongs.  Leave NA if there are no groups.
+@param dodge.width Optional -- The width of position_dodge() in the ggplot if groups are present.  Usually 0.9.
+@param extra_y_space Optional -- Numeric to adjust position of the bracket up or down from its default location.
+@param ... Additional optional parameters/asthetics.  e.g. color for font color or size for font size.
+@return ggplot2 annotation layer
+
+## gg_bracket_between()
+ggplot2 layer to draw a bracket between two samples in a bargraph.  Used in conjunction with gg_ttest_between().
+@param data The dataframe used in the plot
+@param sample_col Column name of the samples in data
+@param sample1 The first sample to be compared
+@param sample2 The second sample to be compared
+@param mean_col Column name of the dependent variable means. Usually the y-axis of the bargraph.
+@param group_col Optional -- Column name of the sample groups if applicable.  Leave NA if there are no groups.
+@param group1 Optional -- The group to which the first sample belongs.  Leave NA if there are no groups.
+@param group2 Optional -- The group to which the second sample belongs.  Leave NA if there are no groups.
+@param dodge.width Optional -- The width of position_dodge() in the ggplot if groups are present.  Usually 0.9.
+@param extra_y_space Optional -- Numeric to adjust position of the bracket up or down from its default location.
+@param ... Additional optional parameters/asthetics.  e.g. color for font color or size for font size.
+@return ggplot2 annotation layer
+
 
 #############################
 # Importing & Cleaning Data #
@@ -815,15 +949,21 @@ These subjects provided only overwhelmingly positive participants.
 ```{r Graph, options}
 
 df_dir %>% spread(otherDir,valDir) %>%
-  ggplot(aes(x=Pos,y=Neg,colour=otherValence2,size=Felt)) +
-  geom_point(alpha=.4,position=position_dodge2(width=0,reverse=TRUE)) +
-  labs(title="Direct Measures of Positivity, Negativity, & Felt Ambivalence",
-    x="Positivity",y="Negativity"
-    ) +
-  guides(
-    colour = guide_legend(title="Valence",override.aes = list(alpha=1,size=5),reverse=TRUE),
-    size = guide_legend(title="Felt\nAmbivalence")
-    )
+  {
+    ggplot(data=.,aes(x=Pos,y=Neg,shape=otherValence2,colour=Felt)) +
+      geom_point(alpha=.6,size=3,position=position_dodge2(width=0,reverse=TRUE)) +
+      labs(x="Positivity",y="Negativity") +
+      guides(
+        shape = guide_legend(title="Acquaintance\nValence",reverse=TRUE,override.aes = list(alpha=1,size=5)),
+        colour = guide_legend(title="Felt\nAmbivalence",override.aes = list(size=5))
+      ) +
+      scale_colour_gradient2(low = "black",mid = "orange",high="red",midpoint = 50) +
+      scale_shape_manual(values=c(1,4)) +
+      theme(plot.margin=margin(1.5,0.5,0.5,0.5,"cm"))
+  } %>%
+  ggdraw() +
+  draw_text("Direct Measures of Acquaintances",x=.45,y=.95)
+
 
 df_dir %>% filter(otherDir != "Griff") %>%
   ggplot(aes(x=otherDir,y=valDir,colour=otherValence2)) +
@@ -1080,24 +1220,293 @@ specificContr %>% filter(not(cPrimeA == "otherPos" & cPrimeB == "otherNeg")) %>%
 
 ```{r label, options}
 
-fullMeans %>% as_tibble %>% mutate(rt = emmean %>% exp) %>%
-  ggplot(aes(x=primeType,y=rt,fill=targetType)) +
-  geom_col(position=position_dodge2(reverse=TRUE)) +
-  labs(x="Primes",y="Reaction Times (ms)") +
-  guides(fill=guide_legend(title="Target",reverse=TRUE)) +
-  scale_fill_manual(values=c('#00BFC4','#F8766D'),labels=c('Negative','Positive')) +
-  geom_label(data = fullContr %>% filter(cPrimeA==cPrimeB),
-             aes(x=cPrimeA,y=1,label=case_when(
-               p.value < .001 ~ '***',
-               p.value < .01 ~ '**',
-               p.value < .05 ~ '*',
-               TRUE ~ NA_character_
-             )),
-             inherit.aes = FALSE)
+# fullMeans %>% as_tibble %>%
+#   mutate(
+#     RT = emmean %>% exp,
+#     primeType= primeType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)),
+#     primes = case_when(
+#       grepl("(other)",primeType) ~ "Significant\nOthers",
+#       grepl("(noun)",primeType) ~ "Univalent\nNouns",
+#       grepl("(letter)",primeType) ~ "Letter\nStrings"
+#     ),
+#     primeValence = case_when(
+#       grepl("(Pos)",primeType) ~ "Positive",
+#       grepl("(Neg)",primeType) ~ "Negative",
+#       grepl("(Str)",primeType) ~ NA_character_
+#     ),
+#     Targets = targetType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)) %>%
+#       recode_factor(
+#         "adjPos" = "Positive",
+#         "adjNeg" = "Negative"
+#       )
+#     ) %>%
+#   ggplot(aes(x=primeValence,y=RT,fill=Targets)) +
+#   geom_col(position=position_dodge2()) +
+#   labs(x="Primes",y="Reaction Time (ms)") +
+#   guides(fill=guide_legend(title="Target\nValence")) +
+#   geom_label(data = fullContr %>% filter(cPrimeA==cPrimeB),
+#              aes(x=cPrimeA,y=1,label=case_when(
+#                p.value < .001 ~ '***',
+#                p.value < .01 ~ '**',
+#                p.value < .05 ~ '*',
+#                TRUE ~ p.value %>% signif(3) %>% as.character
+#              )),
+#              inherit.aes = FALSE) +
+#   theme_bw()
 
-# ggplot_build(plot)$data -> shows info about plot
+
+
+fullMeans %>% as_tibble %>%
+  mutate(
+    RT = emmean %>% exp,
+    primeType= primeType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)),
+    primes = case_when(
+      grepl("(other)",primeType) ~ "Significant\nOthers",
+      grepl("(noun)",primeType) ~ "Univalent\nNouns",
+      grepl("(letter)",primeType) ~ "Letter\nStrings"
+    ) %>% factor(levels=c("Significant\nOthers","Univalent\nNouns","Letter\nStrings")),
+    primeValence = case_when(
+      grepl("(Pos)",primeType) ~ "Positive",
+      grepl("(Neg)",primeType) ~ "Negative",
+      grepl("(Str)",primeType) ~ NA_character_
+    ) %>% factor(levels=c("Positive","Negative")),
+    Targets = targetType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)) %>%
+      recode_factor(
+        "adjPos" = "Positive",
+        "adjNeg" = "Negative"
+      )
+    ) %>%
+  filter(primeValence %>% is.na %>% not) %>%
+  ggplot(aes(x=primeValence,y=RT,fill=Targets)) +
+  geom_col(position=position_dodge2()) +
+  labs(x="Primes",y="Reaction Time (ms)") +
+  guides(fill=guide_legend(title="Target\nValence")) +
+  facet_wrap("primes",strip.position="bottom",scales="free_x") +
+  theme_bw() +
+  theme(panel.spacing = unit(0,"lines"),
+        strip.background = element_blank(),
+        strip.placement = "outside")
+
+
+
+
+ggMeans <- fullMeans %>% as_tibble %>%
+  mutate(
+    RT = emmean %>% exp,
+    yminRT = lower.CL %>% exp,
+    ymaxRT = upper.CL %>% exp,
+    primeType= primeType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)),
+    primes = case_when(
+      grepl("(other)",primeType) ~ "Acquaintances",
+      grepl("(noun)",primeType) ~ "Univalent Nouns",
+      grepl("(letter)",primeType) ~ "Letter Strings"
+    ) %>% factor(levels=c("Acquaintances","Univalent Nouns","Letter Strings")),
+    primeValence = case_when(
+      grepl("(Pos)",primeType) ~ "Positive",
+      grepl("(Neg)",primeType) ~ "Negative",
+      grepl("(Str)",primeType) ~ NA_character_
+    ) %>% factor(levels=c("Positive","Negative")),
+    Targets = targetType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)) %>%
+      recode_factor(
+        "adjPos" = "Positive",
+        "adjNeg" = "Negative"
+      )
+    ) %>%
+  filter(primeValence %>% is.na %>% not)
+
+ggCritContrasts <- specificContr %>%
+  filter(cPrimeB != "letterStr" & cPrimeB != "otherNeg") %>%
+  filter(not(cPrimeA == "otherNeg" & cTargetA == "adjNeg") & not(cPrimeA == "otherPos" & cTargetA == "adjPos")) %>%
+  arrange(cTargetA,cPrimeB) %>%
+  mutate(
+    p = case_when(
+      p.value < .001 ~ '***',
+      p.value < .01 ~ '**',
+      p.value < .05 ~ '*',
+      TRUE ~ p.value %>% signif(3) %>% as.character %>% substr(2,length(.)+1)
+    )
+  )
+
+acqPosNeg <- .24
+acqNegPos <- .33
+nounPosPos <- .52
+nounPosNeg <- .59
+nounNegPos <- .68
+nounNegNeg <- .75
+adjust <- .0015
+
+{
+  ggplot(data=ggMeans,aes(x=primeValence,y=RT,fill=Targets,ymin=yminRT,ymax=ymaxRT)) +
+    geom_errorbar(position=position_dodge2(padding=.75),colour="black",size=.5) +
+    geom_col(position=position_dodge2()) +
+    facet_wrap("primes",strip.position="bottom",scales="free_x") +
+    labs(x="Primes",y="Reaction Time (ms)") +
+    guides(fill=guide_legend(title="Target\nValence")) +
+    scale_y_continuous(breaks = seq(0,800,200)) +
+    theme(panel.spacing.x=unit(0,"lines"),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          strip.text = element_text(margin = margin(0.15,0,0.15,0,unit="cm")),
+          plot.margin = margin(1.5,0.5,0.5,0.5,"cm"))
+  } %>%
+  ggdraw() +  
+  geom_segment(aes(x=acqPosNeg,xend=nounNegNeg,y=.55,yend=.55),colour="black",size=2) +
+  geom_segment(aes(x=acqPosNeg+adjust,xend=nounNegNeg-adjust,y=.55,yend=.55),colour="red",size=1) +
+  geom_tile(aes(x=.46,y=.55,width=.04,height=.025),fill="white",colour="black") +
+  draw_label(ggCritContrasts$p[[1]],x=.46,y=.545)+
+  geom_segment(aes(x=acqPosNeg,xend=nounPosNeg,y=.35,yend=.35),colour="black",size=2) +
+  geom_segment(aes(x=acqPosNeg+adjust,xend=nounPosNeg-adjust,y=.35,yend=.35),colour="green",size=1) +
+  geom_tile(aes(x=.46,y=.35,width=.04,height=.025),fill="white",colour="black") +
+  draw_label(ggCritContrasts$p[[2]],x=.46,y=.345) +
+  geom_segment(aes(x=acqNegPos,xend=nounPosPos,y=.60,yend=.60),colour="black",size=2) +
+  geom_segment(aes(x=acqNegPos+adjust,xend=nounPosPos-adjust,y=.60,yend=.60),colour="red",size=1) +
+  geom_tile(aes(x=.46,y=.60,width=.04,height=.025),fill="white",colour="black") +
+  draw_label(ggCritContrasts$p[[3]],x=.46,y=.60,size = 9) +
+  geom_segment(aes(x=acqNegPos,xend=nounNegPos,y=.40,yend=.40),colour="black",size=2) +
+  geom_segment(aes(x=acqNegPos+adjust,xend=nounNegPos-adjust,y=.40,yend=.40),colour="green",size=1) +
+  geom_tile(aes(x=.46,y=.40,width=.04,height=.025),fill="white",colour="black") +
+  draw_label(ggCritContrasts$p[[4]],x=.46,y=.395) +
+  draw_text("Comparisons of Latency between Acquiantances and Univalent Nouns",x=.5,y=.95)
+  
+```
+
+```{r label, options}
+
+ggMeansStr <- fullMeans %>% as_tibble %>%
+  mutate(
+    RT = emmean %>% exp,
+    yminRT = lower.CL %>% exp,
+    ymaxRT = upper.CL %>% exp,
+    primeType= primeType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)),
+    primes = case_when(
+      grepl("(other)",primeType) ~ "Acquaintances",
+      grepl("(noun)",primeType) ~ "Univalent Nouns",
+      grepl("(letter)",primeType) ~ "Letter Strings"
+    ) %>% factor(levels=c("Acquaintances","Univalent Nouns","Letter Strings")),
+    primeValence = case_when(
+      grepl("(Pos)",primeType) ~ "Positive",
+      grepl("(Neg)",primeType) ~ "Negative",
+      grepl("(Str)",primeType) ~ " "
+    ) %>% factor(levels=c("Positive","Negative"," ")),
+    Targets = targetType %>% factor(levels=levels(.) %>% sort(decreasing=TRUE)) %>%
+      recode_factor(
+        "adjPos" = "Positive",
+        "adjNeg" = "Negative"
+      )
+    ) %>%
+  filter(primeType %in% c("letterStr","otherPos","otherNeg"))
+
+{
+  ggplot(data=ggMeansStr,aes(x=primeValence,y=RT,fill=Targets,ymin=yminRT,ymax=ymaxRT)) +
+    geom_errorbar(position=position_dodge2(padding=.75),colour="black",size=.5) +
+    geom_col(position=position_dodge2()) +
+    facet_wrap("primes",strip.position="bottom",scales="free_x") +
+    labs(x="Primes",y="Reaction Time (ms)") +
+    guides(fill=guide_legend(title="Target\nValence")) +
+    scale_y_continuous(breaks = seq(0,800,200)) +
+    theme(panel.spacing.x=unit(0,"lines"),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          strip.text = element_text(margin = margin(0.15,0,0.15,0,unit="cm")),
+          plot.margin = margin(1.5,0.5,0.5,0.5,"cm"))
+  } %>%
+  ggdraw() +
+  draw_text("Comparisons of Latency between Acquiantances and Letter Strings",x=.5,y=.95)
+
+
+
+
+
+
+
+ggStringContrasts <- specificContr %>%
+  filter(cPrimeB == "letterStr") %>%
+  arrange(cTargetA,cPrimeB) %>%
+  mutate(
+    p = case_when(
+      p.value < .001 ~ '***',
+      p.value < .01 ~ '**',
+      p.value < .05 ~ '*',
+      TRUE ~ p.value %>% signif(3) %>% as.character %>% substr(2,length(.)+1)
+    ),
+    primes = case_when(
+      grepl("(other)",cPrimeA) ~ "Acquaintances"
+    ) %>% factor(levels=c("Acquaintances")),
+    primeValence = case_when(
+      grepl("(Pos)",cPrimeA) ~ "Positive",
+      grepl("(Neg)",cPrimeA) ~ "Negative"
+    ) %>% factor(levels=c("Positive","Negative")),
+    Targets = cTargetA %>%
+      recode_factor(
+        "adjPos" = "Positive",
+        "adjNeg" = "Negative"
+      )
+  )
+
+
+
+
+ggMeansDelta <- ggMeansStr %>% {
+  left_join(
+    filter(.,primeType != "letterStr"),
+    select(.,primeType,RT,Targets) %>%
+      spread(primeType,RT) %>%
+      gather(primeType,RT,otherPos,otherNeg) %>%
+      mutate(
+        deltaRT = subtract(RT,letterStr)
+      ) %>%
+      select(-RT,-letterStr),
+    by=c("primeType","Targets")
+  )
+} %>%
+select(primeType,targetType,RT,deltaRT,everything())
+
+
+
+{
+  ggplot(data=ggMeansDelta,aes(x=primeValence,y=deltaRT,fill=Targets,ymin=yminRT,ymax=ymaxRT)) +
+    geom_col(position=position_dodge2()) +
+    facet_wrap("primes",strip.position="bottom",scales="free_x") +
+    labs(x=NULL,y=expression(Delta * " Reaction Time (ms)")) +
+    guides(fill=guide_legend(title="Target\nValence")) +
+    scale_y_continuous(breaks = seq(-20,100,20)) +
+    geom_label(
+      data = ggStringContrasts,
+      aes(x=primeValence,y=0,label=p,group=Targets),
+      position=position_dodge2(width=.9),
+      inherit.aes = FALSE
+    ) +
+    theme(panel.spacing.x=unit(0,"lines"),
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          strip.text = element_text(margin = margin(0.15,0,0.15,0,unit="cm")),
+          plot.margin = margin(1.5,0.5,0.5,0.5,"cm"))
+  } %>%
+  ggdraw() +
+  draw_text("Difference in Latency between Acquiantances and Letter Strings",x=.5,y=.95)
+
 
 ```
+
+
+```{r label, options}
+  
+  ggplot(data=ggMeans,aes(x=primeType,y=RT,fill=Targets,ymin=yminRT,ymax=ymaxRT)) +
+  geom_col(position=position_dodge2()) +
+  geom_errorbar(position=position_dodge2(padding=.75),colour="black",size=.5)
+
+
+  geom_segment(aes(x=c(1.25),xend=c(3.25),y=c(850),yend=c(850))) +
+  geom_segment(aes(x=c(1.25),xend=c(4.25),y=c(900),yend=c(900))) +
+  geom_segment(aes(x=c(1.75),xend=c(3.75),y=c(950),yend=c(950))) +
+  geom_segment(aes(x=c(1.75),xend=c(4.75),y=c(1000),yend=c(1000)))
+  
+
+
+
+```
+
+
 
 ```{r label, options}
 
