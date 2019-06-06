@@ -1160,7 +1160,6 @@ fullMeans %>% as_tibble %>%
   labs(x="Primes",y="Reaction Time (ms)") +
   guides(fill=guide_legend(title="Target\nValence")) +
   facet_wrap("primes",strip.position="bottom",scales="free_x") +
-  theme_bw() +
   theme(panel.spacing = unit(0,"lines"),
         strip.background = element_blank(),
         strip.placement = "outside")
@@ -1236,16 +1235,18 @@ adjust <- .0015
   geom_segment(aes(x=acqPosNeg+adjust,xend=nounPosNeg-adjust,y=.35,yend=.35),colour="green",size=1) +
   geom_tile(aes(x=.46,y=.35,width=.04,height=.025),fill="white",colour="black") +
   draw_label(ggCritContrasts$p[[2]],x=.46,y=.345) +
-  geom_segment(aes(x=acqNegPos,xend=nounPosPos,y=.60,yend=.60),colour="black",size=2) +
-  geom_segment(aes(x=acqNegPos+adjust,xend=nounPosPos-adjust,y=.60,yend=.60),colour="red",size=1) +
-  geom_tile(aes(x=.46,y=.60,width=.04,height=.025),fill="white",colour="black") +
-  draw_label(ggCritContrasts$p[[3]],x=.46,y=.60,size = 9) +
   geom_segment(aes(x=acqNegPos,xend=nounNegPos,y=.40,yend=.40),colour="black",size=2) +
   geom_segment(aes(x=acqNegPos+adjust,xend=nounNegPos-adjust,y=.40,yend=.40),colour="green",size=1) +
   geom_tile(aes(x=.46,y=.40,width=.04,height=.025),fill="white",colour="black") +
-  draw_label(ggCritContrasts$p[[4]],x=.46,y=.395) +
+  draw_label(ggCritContrasts$p[[3]],x=.46,y=.402,size=9) +
+  geom_segment(aes(x=acqNegPos,xend=nounPosPos,y=.60,yend=.60),colour="black",size=2) +
+  geom_segment(aes(x=acqNegPos+adjust,xend=nounPosPos-adjust,y=.60,yend=.60),colour="red",size=1) +
+  geom_tile(aes(x=.46,y=.60,width=.04,height=.025),fill="white",colour="black") +
+  draw_label(ggCritContrasts$p[[4]],x=.46,y=.595) +
   draw_text("Comparisons of Latency between Acquiantances and Univalent Nouns",x=.45,y=.95)
   
+
+
 ```
 
 ```{r label, options}
