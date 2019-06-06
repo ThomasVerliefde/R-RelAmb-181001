@@ -891,16 +891,11 @@ df_val %>%
 df_val %>%
   distinct(Subject,otherValence,otherValence2,otherDir,valDir) %>%
   spread(otherDir,valDir) %>%
-  mutate(Griff = griffinFormula(Pos,Neg)) %>%
-  group_by(otherValence2) %>%
-  mutate_at(
-    c("Amb","Neg","Pos","Griff"),
-    scale
-  ) %$% {
-    car::leveneTest(Amb ~ otherValence2) %>% print
+  group_by(otherValence2) %$% {
+    car::leveneTest(Felt ~ otherValence2) %>% print
     car::leveneTest(Pos ~ otherValence2) %>% print
     car::leveneTest(Neg ~ otherValence2) %>% print
-    car::leveneTest(Griff ~ otherValence2) %>% print
+    car::leveneTest(zGriff ~ otherValence2) %>% print
   }
 
 df_val %>%
@@ -1875,4 +1870,5 @@ catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
   )
 
 ```
+
 
