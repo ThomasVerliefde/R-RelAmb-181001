@@ -27,10 +27,6 @@ lapply(
 )
 ```
 
-There exists a package to easily create comparison brackets for ggplot, but I cannot manage to install it.
-As such, I have copied the relevant function here for my use.
-The original directory, and relevant information
-
 #############################
 # Importing & Cleaning Data 
 #############################
@@ -829,7 +825,7 @@ df_dir %>%
   ) %>%
   {
     ggplot(data=.,aes(x=Pos,y=Neg,shape=otherValence2,colour=Felt)) +
-      geom_point(alpha=.6,size=3) +
+      geom_point(alpha=1,size=3) +
       labs(x="Positivity",y="Negativity") +
       guides(
         shape = guide_legend(title="Acquaintance\nValence",override.aes = list(alpha=1,size=5)),
@@ -900,20 +896,18 @@ df_val %>%
 
 df_val %>%
   distinct(Subject,otherValence,otherValence2,otherDir,valDir) %>%
-  spread(otherDir,valDir) %>%
-  mutate(Griff = griffinFormula(Pos,Neg)) %$% {
-    t.test(Amb ~ otherValence2) %>% print
+  spread(otherDir,valDir) %$% {
+    t.test(Felt ~ otherValence2) %>% print
     t.test(Pos ~ otherValence2) %>% print
     t.test(Neg ~ otherValence2) %>% print
-    t.test(Griff ~ otherValence2) %>% print
+    t.test(zGriff ~ otherValence2) %>% print
   }
 
-test <- df_val %>%
-  distinct(Subject,otherValence,otherValence2,otherDir,valDir) %>%
-  spread(otherDir,valDir) %>%
-  mutate(Griff = griffinFormula(Pos,Neg)) %>%
-  group_by(otherValence) %>%
-  summarize(mean(Griff))
+# test <- df_val %>%
+#   distinct(Subject,otherValence,otherValence2,otherDir,valDir) %>%
+#   spread(otherDir,valDir) %>%
+#   group_by(otherValence) %>%
+#   summarize(mean(Griff))
 
 ```
 
@@ -1301,7 +1295,7 @@ ggStringContrasts <- specificContr %>%
       p.value < .001 ~ '***',
       p.value < .01 ~ '**',
       p.value < .05 ~ '*',
-      TRUE ~ p.value %>% signif(3) %>% as.character %>% substr(2,length(.)+1)
+      TRUE ~ p.value %>% signif(3) %>% as.character %>% substr(2,nchar(.)+1)
     ),
     primes = case_when(
       grepl("(other)",cPrimeA) ~ "Acquaintances"
