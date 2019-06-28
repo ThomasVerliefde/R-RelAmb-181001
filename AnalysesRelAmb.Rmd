@@ -1,17 +1,17 @@
 ---
 Author: Thomas Verliefde
-Date: '2019-06-05'
+Date: '2019-06-27'
 Output: html_document
 Title: Analyses RelAmb
 editor_options:
   chunk_output_type: console
-version: '1.32'
+version: '1.4'
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-rm(list=ls())
-load("20190515.RData")
+# rm(list=ls())
+# load("20190515.RData")
 
 # save.image("20190515.RData")
 ```
@@ -21,7 +21,7 @@ As usual, I should check which packages are actually used..
 ```{r libraries, include=FALSE}
 lapply(
   c("plyr","dplyr","tidyr","ggplot2","readxl","readr","lme4","afex","lmerTest","emmeans",
-    "pbkrtest","purrr","magrittr","cowplot","parallel"),
+    "pbkrtest","purrr","magrittr","cowplot","parallel","svglite"),
   require,
   character.only = T
 )
@@ -315,6 +315,7 @@ df <- df_raw %>%
 
 ```
 
+Cleanup ==> should set a structure akin to exp2, splitting the dataframes immediately
 This part creates a few subdataframes, to keep overview and reduce the amount of replicated rows.
 [over 666.000 observations in "df" due to multiple "gatherings"]
 
@@ -383,25 +384,52 @@ df_base <- df_raw %>% select(practicePrimes,experimentPrimes,practiceTrials,expe
 # Demographics & More #
 #######################
 
+
 ```{r Inclusions, options}
-
-df_trials %>% group_by(Subject) %>% summarize(
-  "excl" = Correct %>% not %>% mean(na.rm=T)
-) %$% mean(excl) %>% multiply_by(100) %>% signif(5) %>%
-  paste0(.,"% of trials were excluded because they were incorrectly categorized.")
-
-df_trials %>% group_by(Subject) %>% summarize(
-  "excl" = speedInclusion %>% not %>% mean(na.rm=T)
-) %$% mean(excl) %>% multiply_by(100) %>% signif(5) %>%
-  paste0(.,"% of trials were excluded because the response latencies were either too short (<300ms), or too long (>3000ms)") %>%
-  cat
 
 df_subj %$% sum(accInclusion %>% not) %>%
   paste("A total of",.,"participants were fully excluded due to extremes in accuracy and/or latency.") %>%
   cat
 
-df_subj %$% sum(subjExclusion) %>%
+df_subj %$% sum(instrExclusion) %>%
   paste("A total of",.,"participants were fully excluded due to not following instructions.") %>%
+  cat
+
+df_trials %>%
+  filter(subjExclusion %>% not) %$%
+  mean(Correct %>% not) %>%
+  multiply_by(100) %>%
+  signif %>%
+  paste0(.," % of trials were excluded because they were incorrectly categorized.") %>%
+  cat
+
+df_trials %>%
+  filter(subjExclusion %>% not) %>%
+  filter(Correct) %$%
+  mean(speedInclusion %>% not) %>%
+  multiply_by(100) %>%
+  signif %>%
+  paste0(.," % of correct trials were excluded because the response latencies were either too short (<300ms), or too long (>3000ms)") %>%
+  cat
+
+df_trials %>%
+  filter(subjExclusion %>% not) %>%
+  filter(Correct) %>%
+  mutate(Slow = RT > 3000,Fast = RT < 300) %>%
+  summarize_at(
+    vars(Slow,Fast),
+    function(x) {mean(x) %>% multiply_by(100) %>% signif}
+  ) %$%
+  paste(Slow,"% of correct trials were completed too quickly, and\n", Fast,"% of correct trials were completed too slowly.") %>%
+  cat
+
+df_trials %>%
+  filter(subjExclusion %>% not) %$%
+  mean(Inclusion) %>%
+  subtract(1,.) %>%
+  multiply_by(100) %>%
+  signif %>%
+  paste("In total,",.,"% of all trials from included participants were excluded.") %>%
   cat
 
 df_trials %>% filter(!subjExclusion) %>% group_by(Subject) %>% summarize("trialInclusion" = Inclusion %>% mean) %>%
@@ -1866,3 +1894,289 @@ catSRI_extFit <- df_val %>% spread(otherDir,valDir) %>%
 ```
 
 
+
+###################
+# Source Analyses 
+###################
+
+```{r source model, options}
+
+sourceFit <- df_trials %>%
+  filter(Inclusion) %>%
+  filter(primeSource != "letter") %>%
+  mixed(
+    logRT ~ primeValence * targetType * primeSource + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+sourceFit %>% summary
+
+sourceConFit <- df_trials %>%
+  filter(Inclusion) %>%
+  filter(primeSource != "letter") %>%
+  mixed(
+    logRT ~ Condition * primeSource + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+sourceConFit %>% summary
+
+
+sourceFull <- df_trials %>%
+  filter(Inclusion) %>%
+  filter(primeSource != "letter") %>%
+  mixed(
+    logRT ~ primeValence * Condition * primeSource + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+sourceFull %>% summary
+
+```
+
+```{r emmeans source, options}
+
+sourceFit %>%
+  emmeans(~primeSource)
+
+sourceConFit %>%
+  emmeans(~primeSource)
+
+sourceEMM <- sourceFit %>%
+  emmeans(~primeValence * targetType * primeSource)
+
+sourceConEMM <- sourceConFit %>%
+  emmeans(~Condition * primeSource)
+
+sourceFullEMM <- sourceFull %>%
+  emmeans(~primeValence * Condition * primeSource)
+
+sourceFullEMMval <- sourceFull %>%
+  emmeans(~ Condition * primeSource)
+
+```
+
+```{r graph, options}
+
+sourceFullEMM %>%
+  as_tibble %>%
+  ggplot(
+    aes(x = primeValence, fill = Condition, y = exp(emmean), ymin = exp(asymp.LCL), ymax = exp(asymp.UCL)) 
+    ) +
+  geom_col(position=position_dodge2()) +
+  geom_errorbar(position=position_dodge2(padding = .7)) +
+  facet_wrap(~primeSource)
+  
+
+```
+
+
+```{r contrasts source, options}
+
+sourceConEMM %>%
+  contrast(method="pairwise")
+
+sourceEMM %>%
+  contrast(method="pairwise",by=c("targetType","primeValence"))
+
+sourceFullEMM %>%
+  contrast(method="pairwise",by=c("Condition","primeValence"))
+
+sourceFull %>%
+  emmeans(~ Condition * primeSource) %>%
+  contrast(method="pairwise")
+
+```
+
+ contrast                             estimate      SE  df z.ratio p.value
+ Congruent,noun - Incongruent,noun     -0.0732 0.00974 Inf  -7.515 <.0001 
+ Congruent,noun - Congruent,other      -0.0204 0.00954 Inf  -2.136 0.1416 
+ Congruent,noun - Incongruent,other    -0.1238 0.00970 Inf -12.760 <.0001 
+ Incongruent,noun - Congruent,other     0.0528 0.00971 Inf   5.440 <.0001 
+ Incongruent,noun - Incongruent,other  -0.0506 0.00986 Inf  -5.129 <.0001 
+ Congruent,other - Incongruent,other   -0.1034 0.00967 Inf -10.690 <.0001 
+
+targetType = adjNeg, primeValence = Neg:
+ contrast     estimate     SE  df z.ratio p.value
+ noun - other -0.05027 0.0135 Inf -3.735  0.0002 
+
+targetType = adjNeg, primeValence = Pos:
+ contrast     estimate     SE  df z.ratio p.value
+ noun - other -0.06191 0.0138 Inf -4.491  <.0001 
+
+targetType = adjPos, primeValence = Neg:
+ contrast     estimate     SE  df z.ratio p.value
+ noun - other -0.03966 0.0140 Inf -2.835  0.0046 
+
+targetType = adjPos, primeValence = Pos:
+ contrast     estimate     SE  df z.ratio p.value
+ noun - other  0.00874 0.0134 Inf  0.651  0.5153  
+
+
+
+############
+# otherAmb
+############
+
+```{r Models without Ambivalence, options}
+
+sourceDM <- df_RTDM %>%
+  filter(Inclusion) %>%
+  filter(primeDirect != "otherAmb") %>%
+  filter(primeSource != "letter") %>%
+  mixed(
+    logRT ~ primeValence * targetType * primeSource + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+sourceDM
+
+sourceDMCon <- df_RTDM %>%
+  filter(Inclusion) %>%
+  filter(primeDirect != "otherAmb") %>%
+  filter(primeSource != "letter") %>%
+  mixed(
+    logRT ~ Condition * primeSource + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+sourceDMCon
+
+```
+
+```{r emmeans sourceDM, options}
+
+sourceDM %>%
+  emmeans(~primeSource)
+
+sourceDMEMM <- sourceDM %>%
+  emmeans(~primeValence * targetType * primeSource)
+
+sourceDMConEMM <- sourceDMCon %>%
+  emmeans(~Condition * primeSource)
+
+```
+
+```{r contrasts source, options}
+
+
+sourceDMConEMM %>%
+  contrast(method="pairwise")
+
+sourceDMEMM %>%
+  contrast(method="pairwise") %>%
+  as_tibble %>%
+  separate(
+    contrast,
+    c("primeValenceA","targetValenceA","primeSourceA","primeValenceB","targetValenceB","primeSourceB"),
+    ",| - "
+  ) %>%
+  filter(
+    primeValenceA == primeValenceB,
+    targetValenceA == targetValenceB,
+    primeSourceA != primeSourceB
+  ) %>%
+  select(-primeValenceB,-targetValenceB)
+
+
+```
+
+ contrast                             estimate      SE  df z.ratio p.value
+ Congruent,noun - Incongruent,noun    -0.07308 0.00968 Inf  -7.546 <.0001 
+ Congruent,noun - Congruent,other     -0.00858 0.01015 Inf  -0.845 0.8328 
+ Congruent,noun - Incongruent,other   -0.12675 0.01035 Inf -12.251 <.0001 
+ Incongruent,noun - Congruent,other    0.06450 0.01031 Inf   6.253 <.0001 
+ Incongruent,noun - Incongruent,other -0.05367 0.01050 Inf  -5.114 <.0001 
+ Congruent,other - Incongruent,other  -0.11817 0.01087 Inf -10.870 <.0001
+ 
+   primeValenceA targetValenceA primeSourceA primeSourceB estimate     SE    df z.ratio p.value
+  <chr>         <chr>          <chr>        <chr>           <dbl>  <dbl> <dbl>   <dbl>   <dbl>
+1 Neg           Pos            noun         other         -0.0600 0.0158   Inf  -3.80  0.00355
+2 Pos           Pos            noun         other          0.0106 0.0137   Inf   0.772 0.994  
+3 Neg           Neg            noun         other         -0.0402 0.0151   Inf  -2.67  0.132  
+4 Pos           Neg            noun         other         -0.0554 0.0140   Inf  -3.95  0.00202
+
+
+
+
+
+
+```{r Ambivalent primes, options}
+
+valAmbFit <- df_RTDM %>%
+  filter(Inclusion) %>%
+  mixed(
+    logRT ~ primeDirect * targetType + (1|Target) + (1|Subject),
+    data=.,
+    method="S"
+  )
+valAmbFit
+
+valAmbEMM <- valAmbFit %>%
+  emmeans(~primeDirect * targetType)
+
+valAmbEMM %>%
+  contrast(method="trt.vs.ctrl",ref = 2, by = "targetType")
+
+```
+
+
+targetType = Pos:
+ contrast             estimate     SE  df z.ratio p.value
+ letterStr - otherAmb  -0.0659 0.0162 Inf -4.074  0.0002 
+ otherPos - otherAmb   -0.0816 0.0176 Inf -4.645  <.0001 
+ otherNeg - otherAmb    0.0772 0.0197 Inf  3.917  0.0004 
+ nounPos - otherAmb    -0.0812 0.0175 Inf -4.646  <.0001 
+ nounNeg - otherAmb     0.0175 0.0176 Inf  0.993  0.7392 
+
+targetType = Neg:
+ contrast             estimate     SE  df z.ratio p.value
+ letterStr - otherAmb  -0.0942 0.0161 Inf -5.837  <.0001 
+ otherPos - otherAmb    0.0104 0.0176 Inf  0.593  0.9256 
+ otherNeg - otherAmb   -0.0591 0.0193 Inf -3.064  0.0101 
+ nounPos - otherAmb    -0.0444 0.0176 Inf -2.528  0.0495 
+ nounNeg - otherAmb    -0.0922 0.0174 Inf -5.305  <.0001 
+
+P value adjustment: dunnettx method for 5 tests 
+
+
+We see that otherAmb is significantly slower in comparison to letterstrings for both targetTypes
+
+Compared to congruent trials (otherPos, nounPos with targetType == Pos; otherNeg, nounNeg with targetType == Neg),
+otherAmb is significantly slower as well.
+
+Compared to incongruent trials, it is not as clear.
+OtherAmb is faster than negative significant others for incongruent trials, and shows no difference with negative nouns.
+OtherAmb is barely slower than positive nouns for incongruent trials, and shows no difference with positive significant others.
+
+
+####################################
+# Difference Negative - Positive SO
+####################################
+
+```{r model pos neg congruency, options}
+
+conValFit <- df_trials %>%
+  filter(Inclusion) %>%
+  filter(primeSource == "other") %>%
+  mixed(
+    logRT ~ Condition * primeValence + (1|Subject) + (1|Target),
+    data=.,
+    method="S"
+  )
+conValFit %>% summary
+
+```
+
+```{r emm pos neg congruency, options}
+
+conValEMM <- conValFit %>%
+  emmeans(~Condition * primeValence)
+
+```
+
+```{r contrast pos neg congruency, options}
+
+
+
+```
